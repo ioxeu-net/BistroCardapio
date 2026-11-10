@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BistroCardapio - Sistema Real</title>
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<title>Lemgra OS - Sistema Real</title>
+<script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -33,16 +33,13 @@ function loadInitial(){
         if(!Array.isArray(p.sales)) p.sales=[];
         if(!Array.isArray(p.orders)) p.orders=[];
         if(!Array.isArray(p.tables)) p.tables=[1,2,3,4];
-        if(!p.passwords) p.passwords={ admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' };
-        else { for(let k of ['admin','caixa','cozinha','entrega','estoque']) if(p.passwords[k]===undefined) p.passwords[k]=''; }
         return p;
       }
     }
   }catch(e){}
   return {
     restaurant:{ name:'', whatsapp:'', cover:'', message:'Obrigado pela preferência! Volte sempre.' },
-    menu:[], tables:[1,2,3,4], orders:[], sales:[],
-    passwords:{ admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' }
+    menu:[], tables:[1,2,3,4], orders:[], sales:[]
   };
 }
 function parseHash(){
@@ -55,7 +52,6 @@ function parseHash(){
   const params = new URLSearchParams(parts[1] || '');
   return { view, mesa: params.get('mesa') || '' };
 }
-function goBack(){ if(window.history.length>1) window.history.back(); else window.location.hash='#/admin'; }
 function formatBRL(v){ return 'R$ ' + Number(v||0).toFixed(2).replace('.',','); }
 function timeOf(ts){ try{ return new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
 function dateOf(ts){ try{ return new Date(ts).toLocaleDateString('pt-BR'); }catch(e){ return ''; } }
@@ -68,96 +64,18 @@ function QRBox({ text, label }){
   return (<div className="bg-white p-4 rounded-2xl border flex flex-col items-center"><div ref={ref} className="bg-white p-2"></div><p className="text-sm font-bold mt-2">{label}</p><p className="text-[11px] text-slate-400 break-all text-center mt-1">{text}</p><button onClick={download} className="mt-3 w-full bg-slate-900 text-white py-2 rounded-lg text-sm font-bold">Baixar QR</button></div>);
 }
 
-
-function AuthGate({ role, title, passwords, unlocked, onUnlock, children }){
-  const [input, setInput] = useState('');
-  const [error, setError] = useState('');
-  const [showReset, setShowReset] = useState(false);
-  const required = (passwords && passwords[role]) || '';
-  if(!required) return (<div><div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold px-4 py-2 text-center">Sem senha definida para {title}. Peça ao admin para definir uma senha em Admin, Senhas de acesso.</div>{children}</div>);
-  if(unlocked) return children;
-  function tryUnlock(){ if(input===required){ onUnlock(role); setError(''); } else { setError('Senha incorreta. Tente de novo.'); } }
-  return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-100">
-      <div className="bg-white w-full max-w-sm rounded-2xl border p-6 text-center">
-        <p className="text-4xl">🔒</p>
-        <h1 className="font-extrabold text-xl mt-2">{title}</h1>
-        <p className="text-sm text-slate-500 mt-1">Digite a senha de {title.toLowerCase()} para entrar.</p>
-        <input type="password" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') tryUnlock(); }} placeholder="Senha" autoFocus className="w-full border rounded-xl p-3 mt-4 text-center text-lg tracking-widest" />
-        {error && <p className="text-sm text-red-600 font-semibold mt-2">{error}</p>}
-        <button onClick={tryUnlock} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl mt-3">Entrar</button><button onClick={goBack} className="w-full border font-bold py-3 rounded-xl mt-2 text-sm">← Voltar</button>
-        <a href="#/cliente" className="block text-sm text-slate-500 mt-3">Sou cliente, ir para o cardápio</a>
-        {role==='admin' && (
-          <div className="mt-4 border-t pt-3">
-            {!showReset ? <button onClick={()=>setShowReset(true)} className="text-xs text-slate-400 underline">Esqueci a senha do admin</button> : <div><p className="text-xs text-amber-700 font-semibold">Quem está com o aparelho pode zerar a senha. Só use se você é o dono.</p><button onClick={()=>{ onUnlock('__reset_admin__'); }} className="mt-2 w-full bg-red-50 text-red-600 border border-red-200 font-bold py-2 rounded-lg text-sm">Zerar senha do admin e entrar</button></div>}
-          </div>
-        )}
-        <p className="text-xs text-slate-400 mt-3">A senha fica salva só neste navegador. Não é senha de banco, serve para separar as funções no dia a dia.</p>
-      </div>
-    </div>
-  );
-}
-
 function AdminView({ data, setData, showToast }){
   const [form, setForm] = useState({ name:'', desc:'', price:'', category:'Geral', img:'', active:true, stock:'10', minStock:'5' });
   const [editingId, setEditingId] = useState(null);
-  const [tab, setTab] = useState('restaurante');
-  const tabsList = [{id:'restaurante', label:'🏪 Restaurante'}, {id:'cardapio', label:'🍽️ Cardápio'}, {id:'mesas', label:'📱 Mesas e QR'}, {id:'senhas', label:'🔒 Senhas'}, {id:'links', label:'🔗 Links'}, {id:'pedidos', label:'🧾 Pedidos'}];
-  const tabIndex = tabsList.findIndex(x=>x.id===tab);
-  const goPrevTab = ()=>{ if(tabIndex>0) setTab(tabsList[tabIndex-1].id); else goBack(); };
-  const goNextTab = ()=>{ if(tabIndex<tabsList.length-1) setTab(tabsList[tabIndex+1].id); };
-  const [manualType, setManualType] = useState('mesa');
-  const [manualTable, setManualTable] = useState('1');
-  const [manualName, setManualName] = useState('');
-  const [manualPhone, setManualPhone] = useState('');
-  const [manualAddress, setManualAddress] = useState('');
-  const [manualItems, setManualItems] = useState({});
-  const [manualSearch, setManualSearch] = useState('');
-  const [manualCat, setManualCat] = useState('Todos');
-  const manualCats = ['Todos', ...new Set(data.menu.filter(m=> m.active!==false).map(m=> m.category || 'Geral'))];
-  const manualFiltered = data.menu.filter(m=> m.active!==false && m.name.toLowerCase().includes(manualSearch.toLowerCase()) && (manualCat==='Todos' || (m.category || 'Geral')===manualCat));
-  const manualDetailed = Object.entries(manualItems).map(([id, qty])=>{ const it = data.menu.find(m=> String(m.id)===String(id)); return it ? {...it, qty} : null; }).filter(Boolean);
-  const manualSubtotal = manualDetailed.reduce((a,i)=>a+i.price*i.qty,0);
-  const manualService = manualType==='mesa' ? manualSubtotal*0.10 : 0;
-  const manualTotal = manualSubtotal + manualService;
-  function changeManualQty(id, delta){
-    const it = data.menu.find(m=> String(m.id)===String(id));
-    setManualItems(prev=>{
-      const cur = prev[id] || 0;
-      const next = cur + delta;
-      if(next<=0){ const n={...prev}; delete n[id]; return n; }
-      if(next > (it?.stock ?? 0)){ showToast('Sem estoque para ' + (it?.name || '') + '. Só tem ' + (it?.stock ?? 0)); return prev; }
-      return {...prev, [id]: next};
-    });
-  }
-  function createManualOrder(){
-    if(manualDetailed.length===0){ showToast('Adicione pelo menos 1 item do cardápio'); return; }
-    if(manualType==='mesa' && !manualTable){ showToast('Escolha a mesa'); return; }
-    if(manualType==='delivery' && !manualName.trim()){ showToast('Coloque o nome do cliente'); return; }
-    const id = String(Date.now()).slice(-6);
-    const code = String(Math.floor(1000 + Math.random()*9000));
-    const order = { id, table: manualType==='mesa' ? manualTable : null, type: manualType==='mesa' ? 'mesa' : 'delivery', status:'pending', createdAt: Date.now(), code, customerName: manualName, phone: manualPhone, address: manualAddress, items: manualDetailed.map(i=>({ name:i.name, price:i.price, qty:i.qty })), subtotal: manualSubtotal, service: manualService, total: manualTotal };
-    setData(prev=>({...prev, orders:[...prev.orders, order], menu: prev.menu.map(m=>{ const sold = manualDetailed.find(c=> String(c.id)===String(m.id)); if(!sold) return m; return {...m, stock: Math.max(0, (m.stock ?? 0) - sold.qty)}; })}));
-    setManualItems({}); setManualName(''); setManualPhone(''); setManualAddress(''); setManualSearch('');
-    showToast('Pedido #' + id + ' criado e já foi para a cozinha');
-  }
   const base = window.location.href.split('#')[0];
   const links = [
-    { label:'Cliente', url: base + '#/cliente', desc:'Cardápio para o cliente pedir pelo celular', onde:'Onde usar: Celular do cliente, QR colado na mesa' },
-    { label:'Frente de Caixa', url: base + '#/caixa', desc:'PDV rápido para venda no balcão, cobra e libera pedidos', onde:'Onde usar: Computador do caixa, no balcão' },
-    { label:'Cozinha', url: base + '#/cozinha', desc:'Só pedidos pendentes para preparar', onde:'Onde usar: Tablet ou celular da cozinha' },
-    { label:'Entrega', url: base + '#/entrega', desc:'Só entregas liberadas pelo caixa', onde:'Onde usar: Celular do motoca, do entregador' },
-    { label:'Estoque', url: base + '#/estoque', desc:'Controla quantidade de cada item', onde:'Onde usar: Celular ou computador de quem controla o estoque' },
-    { label:'Admin', url: base + '#/admin', desc:'Configurações do dono, cardápio, mesas e senhas', onde:'Onde usar: Só o dono, no celular ou computador do dono' },
+    { label:'Cliente', url: base + '#/cliente', desc:'Cardápio para o cliente' },
+    { label:'Frente de Caixa', url: base + '#/caixa', desc:'PDV rápido para venda no balcão' },
+    { label:'Cozinha', url: base + '#/cozinha', desc:'Só pedidos pendentes' },
+    { label:'Entrega', url: base + '#/entrega', desc:'Só entregas prontas' },
+    { label:'Estoque', url: base + '#/estoque', desc:'Controla quantidade de cada item' },
+    { label:'Admin', url: base + '#/admin', desc:'Configurações' },
   ];
-  function printQR(l){
-    const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(l.url);
-    const w = window.open('', '_blank');
-    if(!w){ showToast('Libere pop-up para imprimir o QR'); return; }
-    w.document.write('<html><head><title>' + l.label + ' - BistroCardapio</title><style>body{font-family:sans-serif;text-align:center;padding:24px} img{width:280px;height:280px;border:1px solid #ddd;padding:8px} h1{font-size:22px;margin:0} h2{font-size:28px;margin:8px 0} p{font-size:14px;color:#555} .onde{font-weight:bold;color:#111} .url{word-break:break-all;font-size:12px}</style></head><body><h1>' + (data.restaurant.name || 'BistroCardapio') + '</h1><h2>' + l.label + '</h2><p class="onde">' + l.onde + '</p><img src="' + qr + '"/><p>Escaneie para abrir</p><p class="url">' + l.url + '</p></body></html>');
-    w.document.close();
-    setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 600);
-  }
   function updateRestaurant(f,v){ setData(prev=>({...prev, restaurant:{...prev.restaurant, [f]:v}})); }
   function saveMenuItem(){
     if(!form.name.trim()){ showToast('Coloque o nome do item'); return; }
@@ -188,25 +106,15 @@ function AdminView({ data, setData, showToast }){
   const todayTotal = todaySales.reduce((a,s)=>a+s.total,0);
   return (
     <div className="min-h-screen">
-      <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-5xl mx-auto flex justify-between items-center"><div className="flex items-center gap-3"><button onClick={goPrevTab} className="bg-white/10 px-3 py-2 rounded-lg text-sm font-bold">← Voltar</button><div><p className="font-extrabold text-lg">Bistro<span className="text-orange-500">Cardapio</span></p><p className="text-xs text-slate-400">Painel real, sem dados de demonstração</p></div></div><div className="flex gap-2"><a href="#/cozinha" className="bg-orange-500 px-4 py-2 rounded-lg text-sm font-bold">🍳 Cozinha</a><a href="#/caixa" className="bg-green-600 px-4 py-2 rounded-lg text-sm font-bold">Abrir Caixa</a><a href="#/estoque" className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold">Estoque</a></div></div></header>
+      <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-5xl mx-auto flex justify-between items-center"><div><p className="font-extrabold text-lg">Lemgra <span className="text-orange-500">OS</span></p><p className="text-xs text-slate-400">Painel real, sem dados de demonstração</p></div><div className="flex gap-2"><a href="#/caixa" className="bg-green-600 px-4 py-2 rounded-lg text-sm font-bold">Abrir Caixa</a><a href="#/estoque" className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold">Estoque</a></div></div></header>
       <main className="max-w-5xl mx-auto p-4 space-y-6 pb-20">
-
+        {!data.restaurant.name && (<div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl"><p className="font-bold text-amber-900">Comece aqui: cadastre o restaurante abaixo.</p><p className="text-sm text-amber-800 mt-1">Sem nome e sem cardápio, o cliente vê uma tela vazia de verdade, não um restaurante fake.</p></div>)}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white p-4 rounded-2xl border"><p className="text-xs font-bold text-slate-400">VENDAS HOJE</p><p className="font-extrabold text-xl mt-1">{formatBRL(todayTotal)}</p><p className="text-xs text-slate-500">{todaySales.length} vendas no caixa</p></div>
           <div className="bg-white p-4 rounded-2xl border"><p className="text-xs font-bold text-slate-400">PEDIDOS</p><p className="font-extrabold text-xl mt-1">{data.orders.length}</p><p className="text-xs text-slate-500">Total de pedidos do cardápio</p></div>
           <div className="bg-white p-4 rounded-2xl border"><p className="text-xs font-bold text-slate-400">ESTOQUE BAIXO</p><p className="font-extrabold text-xl mt-1 text-red-600">{data.menu.filter(m=> (m.stock ?? 0) <= (m.minStock ?? 5)).length}</p><p className="text-xs text-slate-500">Itens abaixo do mínimo</p></div>
         </div>
-        <div className="bg-white p-2 rounded-2xl border flex gap-2 overflow-x-auto sticky top-[68px] z-10">
-          {[
-            {id:'restaurante', label:'🏪 Restaurante'},
-            {id:'cardapio', label:'🍽️ Cardápio'},
-            {id:'mesas', label:'📱 Mesas e QR'},
-            {id:'senhas', label:'🔒 Senhas'},
-            {id:'links', label:'🔗 Links'},
-            {id:'pedidos', label:'🧾 Pedidos'},
-          ].map(x=>(<button key={x.id} onClick={()=>setTab(x.id)} className={'px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap ' + (tab===x.id ? 'bg-slate-900 text-white' : 'bg-slate-100')}>{x.label}</button>))}
-        </div>
-        <section style={{display: tab==='restaurante' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
+        <section className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-4">1. Restaurante</h2>
           <div className="grid md:grid-cols-2 gap-4">
             <div><label className="text-sm font-semibold">Nome do restaurante</label><input value={data.restaurant.name} onChange={e=>updateRestaurant('name', e.target.value)} placeholder="Ex: Lanchonete do Centro" className="w-full border rounded-lg p-2.5 mt-1" /></div>
@@ -215,7 +123,7 @@ function AdminView({ data, setData, showToast }){
             <div><label className="text-sm font-semibold">Mensagem de agradecimento</label><textarea value={data.restaurant.message} onChange={e=>updateRestaurant('message', e.target.value)} rows="3" className="w-full border rounded-lg p-2.5 mt-1"></textarea></div>
           </div>
         </section>
-        <section style={{display: tab==='cardapio' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
+        <section className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-1">2. Cardápio + Estoque inicial</h2>
           <p className="text-sm text-slate-500 mb-4">Ao cadastrar, já defina o estoque. O estoque baixa sozinho a cada venda no caixa ou pedido do cliente.</p>
           <div className="grid md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl">
@@ -247,133 +155,20 @@ function AdminView({ data, setData, showToast }){
             ))}
           </div>
         </section>
-        <section style={{display: tab==='mesas' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
+        <section className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-1">3. Mesas e QR Code real</h2>
           <div className="flex gap-2 mb-4"><button onClick={addTable} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">+ Adicionar mesa</button><button onClick={resetAll} className="text-sm text-red-500 font-semibold px-3">Zerar tudo</button></div>
           <div className="grid md:grid-cols-3 gap-4">{data.tables.map(n=>(<div key={n}><QRBox text={base + '#/cliente?mesa=' + n} label={'Mesa ' + n} /><button onClick={()=>removeTable(n)} className="w-full text-center text-xs text-red-500 mt-1">Remover mesa {n}</button></div>))}</div>
         </section>
-        <section style={{display: tab==='senhas' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
-          <h2 className="font-bold text-lg mb-1">Senhas de acesso</h2>
-          <p className="text-sm text-slate-500 mb-4">Cliente não tem senha, é aberto. Cada função tem sua senha. Deixe vazio para deixar livre, ou coloque de 4 a 12 caracteres. Troque aqui quando alguém sair da equipe.</p>
-          <div className="grid md:grid-cols-2 gap-4">
-            {[
-              {key:'admin', label:'Admin - dono, configura tudo', hint:'Se definir, o Admin pede senha para entrar'},
-              {key:'caixa', label:'Frente de Caixa - quem vende no balcão', hint:'Só abre o caixa'},
-              {key:'cozinha', label:'Cozinha - quem prepara', hint:'Só vê pedidos pendentes'},
-              {key:'entrega', label:'Entrega - motoca', hint:'Só vê entregas prontas'},
-              {key:'estoque', label:'Estoque - quem controla estoque', hint:'Só mexe no estoque'},
-            ].map(r=>(
-              <div key={r.key} className="border rounded-xl p-3">
-                <label className="text-sm font-bold">{r.label}</label>
-                <p className="text-xs text-slate-400">{r.hint}</p>
-                <div className="flex gap-2 mt-2">
-                  <input type="password" value={(data.passwords && data.passwords[r.key]) || ''} onChange={e=>{ const v=e.target.value.replace(/\s/g,'').slice(0,12); setData(prev=>({...prev, passwords:{...prev.passwords, [r.key]: v}})); }} placeholder="Sem senha, livre" className="flex-1 border rounded-lg p-2.5" />
-                  <button onClick={()=>{ setData(prev=>({...prev, passwords:{...prev.passwords, [r.key]: ''}})); showToast('Senha de ' + r.key + ' removida'); }} className="text-xs font-bold text-red-500 border border-red-200 px-3 rounded-lg">Limpar</button>
-                </div>
-                <p className={'text-xs font-bold mt-1 ' + (((data.passwords && data.passwords[r.key]) || '').length>0 ? 'text-green-600' : 'text-amber-600')}>{((data.passwords && data.passwords[r.key]) || '').length>0 ? 'Senha definida, ' + ((data.passwords[r.key]||'').length) + ' caracteres' : 'Sem senha, entrada livre'}</p>
-              </div>
-            ))}
-          </div>
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mt-4 text-sm text-blue-900"><b>Como usar no dia a dia:</b> passe a senha do caixa só para quem fica no caixa, a da cozinha só para a cozinha, e a do admin só para o dono. Se um funcionário sair, venha aqui e troque só a senha dele, sem trocar as outras.</div>
-          <button onClick={()=>showToast('Senhas salvas automaticamente')} className="mt-3 bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold">Salvar senhas</button>
+        <section className="bg-white p-5 rounded-2xl border">
+          <h2 className="font-bold text-lg mb-4">4. Links separados</h2>
+          <div className="space-y-3">{links.map(l=>(<div key={l.label} className="flex flex-col md:flex-row md:items-center gap-2 border rounded-xl p-3"><div className="flex-1"><p className="font-bold">{l.label}</p><p className="text-xs text-slate-500">{l.desc}</p><p className="text-xs break-all text-blue-600 mt-1">{l.url}</p></div><button onClick={()=>copyLink(l.url)} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar</button><a href={l.url} className="text-center border px-4 py-2 rounded-lg text-sm font-semibold">Abrir</a></div>))}</div>
         </section>
-        <section style={{display: tab==='links' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
-          <h2 className="font-bold text-lg mb-1">4. Links separados</h2>
-          <p className="text-sm text-slate-500 mb-4">Cada link abre só a tela daquela pessoa, com o nome de onde usar. Copia o link ou imprime o QR e cola onde usa.</p>
-          <div className="space-y-3">{links.map(l=>(
-            <div key={l.label} className="flex flex-col md:flex-row gap-3 border rounded-2xl p-3">
-              <div className="flex flex-col items-center shrink-0">
-                <img src={'https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=' + encodeURIComponent(l.url)} alt={'QR ' + l.label} className="w-[110px] h-[110px] border rounded-lg bg-white p-1" />
-                <p className="text-[11px] font-bold text-slate-500 mt-1">QR de {l.label}</p>
-              </div>
-              <div className="flex-1">
-                <p className="font-extrabold text-lg">{l.label}</p>
-                <p className="text-xs font-bold text-orange-600">{l.onde}</p>
-                <p className="text-sm text-slate-500 mt-0.5">{l.desc}</p>
-                <p className="text-xs break-all text-blue-600 mt-1">{l.url}</p>
-              </div>
-              <div className="flex md:flex-col gap-2 shrink-0">
-                <button onClick={()=>copyLink(l.url)} className="flex-1 md:flex-none bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold">📋 Copiar link</button>
-                <a href={l.url} className="flex-1 md:flex-none text-center border px-4 py-2.5 rounded-lg text-sm font-semibold">Abrir</a>
-                <button onClick={()=>printQR(l)} className="flex-1 md:flex-none bg-white border-2 border-slate-900 px-4 py-2.5 rounded-lg text-sm font-bold">🖨️ Imprimir QR</button>
-              </div>
-            </div>
-          ))}</div>
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mt-4 text-sm text-blue-900"><b>Como usar:</b> Cliente vai no QR da mesa, Caixa fica aberto no computador do caixa, Cozinha no tablet da cozinha, Entrega no celular do motoca, Estoque em quem controla, Admin só no dono.</div>
-        </section>
-        <section style={{display: tab==='pedidos' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
+        <section className="bg-white p-5 rounded-2xl border">
           <div className="flex justify-between items-center mb-3"><h2 className="font-bold text-lg">5. Pedidos do cardápio</h2><div className="flex gap-2"><button onClick={clearFinished} className="text-sm font-semibold border px-3 py-1.5 rounded-lg">Limpar finalizados</button><button onClick={clearAllOrders} className="text-sm font-semibold text-red-500 border border-red-200 px-3 py-1.5 rounded-lg">Apagar todos</button></div></div>
-          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-4">
-            <div className="flex justify-between items-center"><div><p className="font-bold">🍳 Visualizar Cozinha</p><p className="text-xs text-slate-600">{data.orders.filter(o=>o.status==='pending').length} pedido(s) pendente(s) na cozinha agora • {data.orders.filter(o=>o.status==='ready').length} liberado(s) para o caixa</p></div><a href="#/cozinha" target="_blank" className="bg-orange-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold shrink-0">Abrir Cozinha ↗</a></div>
-            {data.orders.filter(o=>o.status==='pending').length>0 && <div className="mt-3 space-y-1">{data.orders.filter(o=>o.status==='pending').slice(0,3).map(o=>(<p key={o.id} className="text-sm bg-white border rounded-lg p-2">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega' : 'Mesa ' + o.table} • {o.items.map(i=> i.qty + 'x ' + i.name).join(', ')}</p>))}</div>}
-            {data.orders.filter(o=>o.status==='pending').length===0 && <p className="text-sm text-slate-500 mt-2">Nenhum pedido pendente na cozinha agora.</p>}
-          </div>
-          <div className="bg-slate-50 border rounded-2xl p-4 mb-4">
-            <p className="font-bold">Criar pedido manual</p>
-            <p className="text-xs text-slate-500">Os campos já vêm com os nomes do cardápio. Quando você cadastra um item em Cardápio, ele aparece aqui sozinho, sem precisar digitar de novo.</p>
-            <div className="flex gap-2 mt-3">
-              <button onClick={()=>setManualType('mesa')} className={'flex-1 py-2.5 rounded-xl font-bold text-sm ' + (manualType==='mesa' ? 'bg-slate-900 text-white' : 'bg-white border')}>Mesa</button>
-              <button onClick={()=>setManualType('delivery')} className={'flex-1 py-2.5 rounded-xl font-bold text-sm ' + (manualType==='delivery' ? 'bg-slate-900 text-white' : 'bg-white border')}>Entrega</button>
-            </div>
-            {manualType==='mesa' ? (
-              <div className="grid md:grid-cols-2 gap-3 mt-3">
-                <div><label className="text-sm font-semibold">Mesa</label><select value={manualTable} onChange={e=>setManualTable(e.target.value)} className="w-full border rounded-lg p-2.5 mt-1 bg-white">{data.tables.map(n=>(<option key={n} value={n}>Mesa {n}</option>))}</select></div>
-                <div><label className="text-sm font-semibold">Nome do cliente (opcional)</label><input value={manualName} onChange={e=>setManualName(e.target.value)} placeholder="Ex: João" className="w-full border rounded-lg p-2.5 mt-1" /></div>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-3 gap-3 mt-3">
-                <div><label className="text-sm font-semibold">Nome do cliente</label><input value={manualName} onChange={e=>setManualName(e.target.value)} placeholder="Ex: Maria" className="w-full border rounded-lg p-2.5 mt-1" /></div>
-                <div><label className="text-sm font-semibold">Telefone</label><input value={manualPhone} onChange={e=>setManualPhone(e.target.value.replace(/\D/g,'').slice(0,11))} placeholder="17999999999" className="w-full border rounded-lg p-2.5 mt-1" /></div>
-                <div><label className="text-sm font-semibold">Endereço</label><input value={manualAddress} onChange={e=>setManualAddress(e.target.value)} placeholder="Rua, número, bairro" className="w-full border rounded-lg p-2.5 mt-1" /></div>
-              </div>
-            )}
-            <input value={manualSearch} onChange={e=>setManualSearch(e.target.value)} placeholder="Buscar no cardápio..." className="w-full border rounded-lg p-2.5 mt-3 bg-white" />
-            <div className="flex gap-2 mt-3 overflow-x-auto">
-              {manualCats.map(c=>(<button key={c} onClick={()=>setManualCat(c)} className={'px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap ' + (manualCat===c ? 'bg-slate-900 text-white' : 'bg-white border')}>{c}</button>))}
-            </div>
-            {data.menu.length===0 ? (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">Cardápio vazio. Vá em Cardápio, cadastre um item e ele vai aparecer aqui automaticamente.</p>
-            ) : manualFiltered.length===0 ? (
-              <p className="text-sm text-slate-500 mt-3">Nenhum item nessa categoria.</p>
-            ) : (
-              <div className="space-y-4 mt-3 max-h-96 overflow-y-auto">
-                {[...new Set(manualFiltered.map(m=> m.category || 'Geral'))].map(cat=>(
-                  <div key={cat}>
-                    <p className="font-bold text-sm mb-2">{cat}</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {manualFiltered.filter(m=> (m.category || 'Geral')===cat).map(m=>{
-                        const qty = manualItems[m.id] || 0;
-                        const selected = qty>0;
-                        const outOfStock = (m.stock ?? 0) <= 0;
-                        return (
-                          <div key={m.id} onClick={()=>{ if(!outOfStock) changeManualQty(m.id, 1); }} className={'cursor-pointer text-left p-2 rounded-xl border-2 ' + (selected ? 'border-green-500 bg-green-50' : outOfStock ? 'border-slate-200 bg-slate-100 opacity-60' : 'border-slate-200 bg-white')}>
-                            <div className="flex justify-between items-start gap-1"><p className="font-bold text-[13px] leading-tight">{m.name}</p>{selected && <span className="bg-green-600 text-white text-xs font-bold px-2 py-0.5 rounded-full shrink-0">{qty}x ✓</span>}</div>
-                            <p className="text-sm text-slate-600 mt-1">{formatBRL(m.price)}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{outOfStock ? 'Esgotado' : 'Estoque: ' + (m.stock ?? 0)}</p>
-                            <p className="text-xs font-bold mt-1 text-slate-500">{selected ? 'Clique de novo para +1' : 'Clique para selecionar'}</p>
-                            {selected && <div className="flex gap-2 mt-2" onClick={e=>e.stopPropagation()}><button onClick={()=>changeManualQty(m.id, -1)} className="flex-1 bg-white border rounded-lg py-1.5 text-sm font-bold">- 1</button><button onClick={()=>{ setManualItems(prev=>{ const n={...prev}; delete n[m.id]; return n; }); }} className="flex-1 bg-red-50 text-red-600 border border-red-200 rounded-lg py-1.5 text-sm font-bold">Remover</button></div>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex justify-between items-center mt-4">
-              <div><p className="text-xs text-slate-500">Subtotal {formatBRL(manualSubtotal)} {manualType==='mesa' ? '+ 10% serviço ' + formatBRL(manualService) : ''}</p><p className="font-extrabold text-lg">Total {formatBRL(manualTotal)}</p></div>
-              <button onClick={createManualOrder} className="bg-green-600 text-white px-5 py-3 rounded-xl font-bold text-sm">Criar pedido</button>
-            </div>
-          </div>
-          <p className="font-bold mb-2">Pedidos recebidos</p>
           {data.orders.length===0 && <p className="text-sm text-slate-400">Nenhum pedido ainda.</p>}
-          <div className="space-y-2">{[...data.orders].reverse().map(o=>(<div key={o.id} className="border rounded-xl p-3 flex justify-between"><div><p className="font-bold">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega' : 'Mesa ' + o.table}</p><p className="text-xs text-slate-500">{timeOf(o.createdAt)} • {o.items.map(i=> i.qty + 'x ' + i.name).join(', ')}</p><p className="text-sm font-bold mt-1">{formatBRL(o.total)}</p></div><span className="text-xs font-bold h-fit px-2 py-1 rounded-full bg-slate-100">{o.status==='pending' ? 'PENDING • NA COZINHA' : o.status==='ready' ? 'LIBERADO P/ CAIXA' : o.status==='awaiting_delivery' ? 'AGUARD. ENTREGADOR' : o.status==='delivered' ? 'FINALIZADO' : o.status}</span></div>))}</div>
+          <div className="space-y-2">{[...data.orders].reverse().map(o=>(<div key={o.id} className="border rounded-xl p-3 flex justify-between"><div><p className="font-bold">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega' : 'Mesa ' + o.table}</p><p className="text-xs text-slate-500">{timeOf(o.createdAt)} • {o.items.map(i=> i.qty + 'x ' + i.name).join(', ')}</p><p className="text-sm font-bold mt-1">{formatBRL(o.total)}</p></div><span className="text-xs font-bold h-fit px-2 py-1 rounded-full bg-slate-100">{o.status}</span></div>))}</div>
         </section>
-        <div className="flex items-center justify-between bg-white p-3 rounded-2xl border sticky bottom-4 shadow-sm">
-          <button onClick={goPrevTab} className="px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-100 disabled:opacity-40" disabled={tabIndex===0 && window.history.length<=1}>← Voltar</button>
-          <span className="text-sm font-bold text-slate-500">{tabIndex+1} de {tabsList.length} • {tabsList[tabIndex] ? tabsList[tabIndex].label : ''}</span>
-          <button onClick={goNextTab} disabled={tabIndex===tabsList.length-1} className="px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-900 text-white disabled:opacity-40">Próximo →</button>
-        </div>
       </main>
     </div>
   );
@@ -409,51 +204,10 @@ function CaixaView({ data, setData, showToast }){
     setData(prev=>({...prev, sales:[...(prev.sales||[]), sale], menu: prev.menu.map(m=>{ const sold = cartDetailed.find(c=>c.id===m.id); if(!sold) return m; return {...m, stock: Math.max(0, (m.stock ?? 0) - sold.qty)}; })}));
     setCart([]); setPaid(''); setLastSale(sale); showToast('Venda #' + sale.id + ' finalizada');
   }
-  function refundSale(s){
-    if(!confirm('Estornar a venda #' + s.id + ' de ' + formatBRL(s.total) + '? O estoque volta e a venda some do total de hoje.')) return;
-    setData(prev=>{
-      const newMenu = prev.menu.map(m=>{
-        const it = s.items.find(i=> i.name===m.name);
-        if(!it) return m;
-        return {...m, stock: (m.stock ?? 0) + it.qty};
-      });
-      let newOrders = prev.orders;
-      if(s.orderId){
-        newOrders = prev.orders.map(o=> o.id===s.orderId ? {...o, status:'ready'} : o);
-      }
-      return {...prev, sales: prev.sales.filter(x=> x.id!==s.id), menu: newMenu, orders: newOrders};
-    });
-    showToast('Venda #' + s.id + ' estornada, estoque devolvido');
-  }
   return (
     <div className="min-h-screen">
-      <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-6xl mx-auto flex justify-between items-center"><div className="flex items-center gap-3"><button onClick={goBack} className="bg-white/10 px-3 py-2 rounded-lg text-sm font-bold">← Voltar</button><div><p className="font-extrabold text-lg">Frente de Caixa</p><p className="text-xs text-slate-400">{data.restaurant.name || 'Sem restaurante'} • Hoje: {formatBRL(todayTotal)} em {todaySales.length} vendas</p></div></div><div className="flex gap-2"><a href="#/cozinha" className="bg-orange-500 px-3 py-2 rounded-lg text-sm font-bold">🍳 Ver Cozinha</a><a href="#/admin" className="bg-white/10 px-3 py-2 rounded-lg text-sm font-bold">Admin</a><a href="#/estoque" className="bg-amber-500 text-slate-900 px-3 py-2 rounded-lg text-sm font-bold">Estoque</a></div></div></header>
-      <main className="max-w-6xl mx-auto p-4 pb-20">
-        <div className="bg-white border rounded-2xl p-3 mb-4 flex justify-between items-center">
-          <div><p className="font-bold">🍳 Cozinha agora: {data.orders.filter(o=>o.status==='pending').length} pendente(s) • {data.orders.filter(o=>o.status==='ready').length} liberado(s) para o caixa</p><p className="text-xs text-slate-500">Dá para ver o que a cozinha está preparando sem sair do caixa.</p></div>
-          <a href="#/cozinha" target="_blank" className="bg-orange-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold shrink-0">Visualizar Cozinha ↗</a>
-        </div>
-        {data.orders.filter(o=>o.status==='ready').length>0 && (
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4">
-            <div className="flex justify-between items-center"><div><p className="font-extrabold">Pedidos prontos da cozinha, aguardando o caixa</p><p className="text-xs text-slate-600">A cozinha liberou. Você cobra e libera para a mesa ou para a entrega.</p></div><span className="bg-amber-400 text-slate-900 text-xs font-bold px-3 py-1 rounded-full">{data.orders.filter(o=>o.status==='ready').length} aguardando</span></div>
-            <div className="grid md:grid-cols-2 gap-3 mt-3">
-              {data.orders.filter(o=>o.status==='ready').map(o=>(
-                <div key={o.id} className="bg-white border rounded-xl p-3">
-                  <div className="flex justify-between"><p className="font-bold">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega - ' + (o.customerName || '') : 'Mesa ' + o.table}</p><span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-1 rounded-full h-fit">PRONTO</span></div>
-                  <p className="text-xs text-slate-500 mt-1">{o.items.map(i=> i.qty + 'x ' + i.name).join(', ')}</p>
-                  <p className="font-extrabold mt-1">{formatBRL(o.total)} • {o.type==='delivery' ? 'Entrega' : 'Mesa'}</p>
-                  {o.type==='delivery' ? (
-                    <button onClick={()=>{ setData(prev=>({...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'awaiting_delivery'} : x)})); showToast('Pedido #' + o.id + ' liberado para a entrega'); }} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold text-sm mt-2">LIBERAR PARA ENTREGA →</button>
-                  ) : (
-                    <button onClick={()=>{ const sale = { id: String(Date.now()).slice(-6), items: o.items, total: o.total, payment, paid: payment==='dinheiro' ? Math.max(paidNum, o.total) : o.total, change: payment==='dinheiro' ? Math.max(0, paidNum - o.total) : 0, createdAt: Date.now(), origin:'caixa-pedido', orderId: o.id }; setData(prev=>({...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'delivered'} : x), sales:[...(prev.sales||[]), sale]})); showToast('Pedido #' + o.id + ' cobrado e entregue na mesa'); }} className="w-full bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm mt-2">COBRAR E ENTREGAR NA MESA ✓</button>
-                  )}
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500 mt-2">Pagamento usado: {payment} • Para entrega, o caixa só libera, quem finaliza é o entregador com o código de 4 dígitos.</p>
-          </div>
-        )}
-        <div className="grid lg:grid-cols-3 gap-4">
+      <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-6xl mx-auto flex justify-between items-center"><div><p className="font-extrabold text-lg">Frente de Caixa</p><p className="text-xs text-slate-400">{data.restaurant.name || 'Sem restaurante'} • Hoje: {formatBRL(todayTotal)} em {todaySales.length} vendas</p></div><div className="flex gap-2"><a href="#/admin" className="bg-white/10 px-3 py-2 rounded-lg text-sm font-bold">Admin</a><a href="#/estoque" className="bg-amber-500 text-slate-900 px-3 py-2 rounded-lg text-sm font-bold">Estoque</a></div></div></header>
+      <main className="max-w-6xl mx-auto p-4 grid lg:grid-cols-3 gap-4 pb-20">
         <div className="lg:col-span-2">
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar item, ex: X-Salada" className="w-full border rounded-xl p-3 bg-white mb-3" />
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -466,7 +220,7 @@ function CaixaView({ data, setData, showToast }){
               </button>
             ))}
           </div>
-          <div className="bg-white p-4 rounded-2xl border mt-4"><div className="flex justify-between items-center"><h3 className="font-bold">Vendas de hoje</h3><p className="text-xs text-slate-400">Para estornar, clica em Estornar, o estoque volta</p></div>{todaySales.length===0 && <p className="text-sm text-slate-400 mt-2">Nenhuma venda hoje ainda.</p>}<div className="space-y-2 mt-2">{[...todaySales].reverse().slice(0,20).map(s=>(<div key={s.id} className="flex justify-between items-center gap-2 text-sm border rounded-lg p-2"><div className="flex-1"><span>#{s.id} • {timeOf(s.createdAt)} • {s.payment} • {s.items.map(i=> i.qty+'x '+i.name).join(', ')}</span><br/><b>{formatBRL(s.total)}</b>{s.orderId && <span className="text-xs text-slate-400"> • Pedido #{s.orderId}</span>}</div><button onClick={()=>refundSale(s)} className="bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-bold shrink-0">↩ Estornar</button></div>))}</div></div>
+          <div className="bg-white p-4 rounded-2xl border mt-4"><h3 className="font-bold">Vendas de hoje</h3>{todaySales.length===0 && <p className="text-sm text-slate-400 mt-2">Nenhuma venda hoje ainda.</p>}<div className="space-y-2 mt-2">{[...todaySales].reverse().slice(0,10).map(s=>(<div key={s.id} className="flex justify-between text-sm border rounded-lg p-2"><span>#{s.id} • {timeOf(s.createdAt)} • {s.payment} • {s.items.map(i=> i.qty+'x '+i.name).join(', ')}</span><b>{formatBRL(s.total)}</b></div>))}</div></div>
         </div>
         <div className="bg-white p-5 rounded-2xl border h-fit sticky top-20">
           <h2 className="font-bold text-lg">Venda atual</h2>
@@ -476,7 +230,6 @@ function CaixaView({ data, setData, showToast }){
           <div className="flex justify-between font-extrabold text-xl mt-4 pt-3 border-t"><span>Total</span><span>{formatBRL(total)}</span></div>
           <button onClick={finalize} className="w-full bg-green-600 text-white font-bold py-4 rounded-xl mt-3">Finalizar venda</button>
           <button onClick={()=>{setCart([]); setPaid('');}} className="w-full border font-bold py-2.5 rounded-xl mt-2 text-sm">Limpar</button>
-        </div>
         </div>
       </main>
       {lastSale && (
@@ -516,7 +269,7 @@ function EstoqueView({ data, setData, showToast }){
   }
   return (
     <div className="min-h-screen">
-      <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-5xl mx-auto flex justify-between items-center"><div className="flex items-center gap-3"><button onClick={goBack} className="bg-white/10 px-3 py-2 rounded-lg text-sm font-bold">← Voltar</button><div><p className="font-extrabold text-lg">Estoque</p><p className="text-xs text-slate-400">{data.restaurant.name || 'Sem restaurante'} • Valor em estoque: {formatBRL(totalValue)}</p></div></div><div className="flex gap-2"><a href="#/caixa" className="bg-green-600 px-3 py-2 rounded-lg text-sm font-bold">Caixa</a><a href="#/admin" className="bg-white/10 px-3 py-2 rounded-lg text-sm font-bold">Admin</a></div></div></header>
+      <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-5xl mx-auto flex justify-between items-center"><div><p className="font-extrabold text-lg">Estoque</p><p className="text-xs text-slate-400">{data.restaurant.name || 'Sem restaurante'} • Valor em estoque: {formatBRL(totalValue)}</p></div><div className="flex gap-2"><a href="#/caixa" className="bg-green-600 px-3 py-2 rounded-lg text-sm font-bold">Caixa</a><a href="#/admin" className="bg-white/10 px-3 py-2 rounded-lg text-sm font-bold">Admin</a></div></div></header>
       <main className="max-w-5xl mx-auto p-4 pb-20">
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="bg-white p-4 rounded-2xl border"><p className="text-xs font-bold text-slate-400">ITENS</p><p className="font-extrabold text-xl">{data.menu.length}</p></div>
@@ -591,7 +344,7 @@ function ClientView({ data, cart, setCart, showToast, setData, mesaParam }){
   }
   return (
     <div className="min-h-screen pb-28">
-      <div className="relative h-56 bg-slate-800"><button onClick={goBack} className="absolute top-4 left-4 z-10 bg-black/60 text-white px-3 py-2 rounded-full text-sm font-bold">← Voltar</button>{data.restaurant.cover ? <img src={data.restaurant.cover} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/60 text-sm">Sem foto de capa</div>}<div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-5"><div><h1 className="text-white text-3xl font-extrabold">{data.restaurant.name}</h1><p className="text-white/80 text-sm mt-1">{mesaParam ? 'Mesa ' + mesaParam + ' • Pedido pelo celular' : 'Peça pelo celular • Sem fila'}</p></div></div></div>
+      <div className="relative h-56 bg-slate-800">{data.restaurant.cover ? <img src={data.restaurant.cover} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/60 text-sm">Sem foto de capa</div>}<div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-5"><div><h1 className="text-white text-3xl font-extrabold">{data.restaurant.name}</h1><p className="text-white/80 text-sm mt-1">{mesaParam ? 'Mesa ' + mesaParam + ' • Pedido pelo celular' : 'Peça pelo celular • Sem fila'}</p></div></div></div>
       <div className="max-w-3xl mx-auto p-4">
         <div className="flex gap-2 overflow-x-auto pb-2">{categories.map(c=> <button key={c} onClick={()=>setCategory(c)} className={'px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ' + (category===c ? 'bg-slate-900 text-white' : 'bg-white border')}>{c}</button>)}</div>
         {filtered.length===0 && <div className="bg-white p-6 rounded-2xl text-center mt-4"><p className="font-bold">Nenhum item nesta categoria</p><p className="text-sm text-slate-500 mt-1">Cadastre itens no Admin.</p></div>}
@@ -609,15 +362,15 @@ function KitchenView({ data, setData, showToast }){
   const pending = data.orders.filter(o=>o.status==='pending');
   const ready = data.orders.filter(o=>o.status==='ready');
   function setStatus(id, status){ setData(prev=>({...prev, orders: prev.orders.map(o=> o.id===id ? {...o, status} : o)})); showToast('Pedido #' + id + ' atualizado'); }
-  return (<div className="min-h-screen bg-slate-100"><header className="bg-white p-4 border-b flex justify-between items-center"><div className="flex items-center gap-3"><button onClick={goBack} className="bg-slate-100 px-3 py-2 rounded-lg text-sm font-bold">← Voltar</button><a href="#/caixa" className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-bold">Ver Caixa</a><div><h1 className="font-bold text-xl">Cozinha • {data.restaurant.name || 'Sem restaurante'}</h1><p className="text-xs text-slate-500">Pending = na cozinha • Liberado = vai para o caixa • Caixa libera para mesa ou entrega.</p></div></div><div className="flex gap-4 text-center"><div><p className="text-xs font-bold text-slate-400">PENDENTES</p><p className="font-bold text-xl">{pending.length}</p></div><div><p className="text-xs font-bold text-slate-400">PRONTOS</p><p className="font-bold text-xl text-green-600">{ready.length}</p></div></div></header><main className="p-4 flex gap-4 overflow-x-auto">{pending.length===0 && <div className="w-full text-center mt-16 text-slate-400"><p className="text-4xl">🍳</p><p className="mt-2 font-semibold">Nenhum pedido pendente</p></div>}{pending.map(o=>(<div key={o.id} className="bg-white w-72 shrink-0 rounded-2xl border-l-4 border-orange-500 p-4"><div className="flex justify-between"><span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold">{o.type==='delivery' ? 'ENTREGA' : 'MESA ' + o.table}</span><span className="text-xs text-slate-400">{timeOf(o.createdAt)}</span></div><p className="font-bold mt-3">Pedido #{o.id}</p><div className="bg-slate-50 rounded-lg p-3 mt-2 text-sm space-y-1">{o.items.map((it,idx)=><div key={idx} className="flex justify-between"><span>{it.name}</span><b>x{it.qty}</b></div>)}</div><button onClick={()=>{ setStatus(o.id,'ready'); showToast('Pedido #' + o.id + ' liberado para o caixa'); }} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-sm mt-3">LIBERAR PARA O CAIXA →</button></div>))}{ready.map(o=>(<div key={o.id} className="bg-white w-72 shrink-0 rounded-2xl border-l-4 border-green-500 p-4"><p className="text-xs font-bold text-green-600">LIBERADO PARA O CAIXA</p><p className="font-bold mt-2">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega' : 'Mesa ' + o.table}</p><p className="text-xs text-slate-500 mt-2">Pronto na cozinha. Aguardando o caixa cobrar e liberar.</p><div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mt-3 text-xs font-bold text-amber-800 text-center">Aguardando o Frente de Caixa</div></div>))}</main></div>);
+  return (<div className="min-h-screen bg-slate-100"><header className="bg-white p-4 border-b flex justify-between items-center"><div><h1 className="font-bold text-xl">Cozinha • {data.restaurant.name || 'Sem restaurante'}</h1><p className="text-xs text-slate-500">Só pedidos reais que o cliente confirmou.</p></div><div className="flex gap-4 text-center"><div><p className="text-xs font-bold text-slate-400">PENDENTES</p><p className="font-bold text-xl">{pending.length}</p></div><div><p className="text-xs font-bold text-slate-400">PRONTOS</p><p className="font-bold text-xl text-green-600">{ready.length}</p></div></div></header><main className="p-4 flex gap-4 overflow-x-auto">{pending.length===0 && <div className="w-full text-center mt-16 text-slate-400"><p className="text-4xl">🍳</p><p className="mt-2 font-semibold">Nenhum pedido pendente</p></div>}{pending.map(o=>(<div key={o.id} className="bg-white w-72 shrink-0 rounded-2xl border-l-4 border-orange-500 p-4"><div className="flex justify-between"><span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold">{o.type==='delivery' ? 'ENTREGA' : 'MESA ' + o.table}</span><span className="text-xs text-slate-400">{timeOf(o.createdAt)}</span></div><p className="font-bold mt-3">Pedido #{o.id}</p><div className="bg-slate-50 rounded-lg p-3 mt-2 text-sm space-y-1">{o.items.map((it,idx)=><div key={idx} className="flex justify-between"><span>{it.name}</span><b>x{it.qty}</b></div>)}</div><button onClick={()=>setStatus(o.id,'ready')} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-sm mt-3">MARCAR PRONTO</button></div>))}{ready.map(o=>(<div key={o.id} className="bg-white w-72 shrink-0 rounded-2xl border-l-4 border-green-500 p-4"><p className="text-xs font-bold text-green-600">PRONTO</p><p className="font-bold mt-2">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega' : 'Mesa ' + o.table}</p>{o.type!=='delivery' && <button onClick={()=>setStatus(o.id,'delivered')} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold text-sm mt-3">ENTREGUE NA MESA</button>}{o.type==='delivery' && <p className="text-xs text-slate-500 mt-3">Aparece para o entregador.</p>}</div>))}</main></div>);
 }
 
 function DeliveryView({ data, setData, showToast }){
   const [codes, setCodes] = useState({});
-  const ready = data.orders.filter(o=>o.type==='delivery' && (o.status==='awaiting_delivery' || o.status==='ready'));
+  const ready = data.orders.filter(o=>o.type==='delivery' && o.status==='ready');
   const waiting = data.orders.filter(o=>o.type==='delivery' && o.status==='pending');
   function confirmDelivery(o){ const typed = (codes[o.id]||'').trim(); if(typed !== o.code){ showToast('Código incorreto. Peça o código de 4 dígitos para o cliente.'); return; } setData(prev=>({...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'delivered'} : x)})); showToast('Entrega #' + o.id + ' finalizada'); }
-  return (<div className="min-h-screen bg-slate-50"><header className="bg-blue-600 text-white p-4"><div className="flex items-center gap-3"><button onClick={goBack} className="bg-white/20 px-3 py-2 rounded-lg text-sm font-bold">← Voltar</button><div><h1 className="font-bold text-xl">Entregas • {data.restaurant.name || 'Sem restaurante'}</h1><p className="text-xs text-blue-100">Só entregas liberadas pelo caixa. Peça o código de 4 dígitos para finalizar.</p></div></div></header><main className="p-4 space-y-4 max-w-2xl mx-auto">{ready.length===0 && <div className="bg-white p-6 rounded-2xl text-center"><p className="text-4xl">🛵</p><p className="font-bold mt-2">Nenhuma entrega pronta</p>{waiting.length>0 && <p className="text-xs text-slate-400 mt-2">{waiting.length} entrega(s) aguardando a cozinha.</p>}</div>}{ready.map(o=>(<div key={o.id} className="bg-white p-5 rounded-2xl border"><div className="flex justify-between"><div><h3 className="font-bold text-lg">Pedido #{o.id}</h3><p className="text-sm text-slate-500">{o.customerName} • {o.address}</p><p className="text-sm text-slate-500">{o.phone} • {timeOf(o.createdAt)}</p></div><span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold h-fit">PRONTO</span></div><div className="bg-slate-50 p-3 rounded-lg mt-3 text-sm space-y-1">{o.items.map((it,idx)=><div key={idx} className="flex justify-between"><span>{it.qty}x {it.name}</span><span>{formatBRL(it.price*it.qty)}</span></div>)}<div className="flex justify-between font-bold pt-2 border-t"><span>Total</span><span>{formatBRL(o.total)}</span></div></div><div className="flex gap-2 mt-4"><div className="flex-1"><label className="text-xs font-bold text-slate-500">CÓDIGO DO CLIENTE, 4 DÍGITOS</label><input value={codes[o.id]||''} onChange={e=>setCodes({...codes, [o.id]: e.target.value})} inputMode="numeric" placeholder="Ex: 1234" className="w-full border rounded-lg p-2.5 mt-1 text-center font-mono text-lg tracking-widest" /></div><button onClick={()=>confirmDelivery(o)} className="bg-blue-600 text-white px-6 rounded-lg font-bold">Entregar</button></div></div>))}</main></div>);
+  return (<div className="min-h-screen bg-slate-50"><header className="bg-blue-600 text-white p-4"><h1 className="font-bold text-xl">Entregas • {data.restaurant.name || 'Sem restaurante'}</h1><p className="text-xs text-blue-100">Só entregas reais, prontas na cozinha.</p></header><main className="p-4 space-y-4 max-w-2xl mx-auto">{ready.length===0 && <div className="bg-white p-6 rounded-2xl text-center"><p className="text-4xl">🛵</p><p className="font-bold mt-2">Nenhuma entrega pronta</p>{waiting.length>0 && <p className="text-xs text-slate-400 mt-2">{waiting.length} entrega(s) aguardando a cozinha.</p>}</div>}{ready.map(o=>(<div key={o.id} className="bg-white p-5 rounded-2xl border"><div className="flex justify-between"><div><h3 className="font-bold text-lg">Pedido #{o.id}</h3><p className="text-sm text-slate-500">{o.customerName} • {o.address}</p><p className="text-sm text-slate-500">{o.phone} • {timeOf(o.createdAt)}</p></div><span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold h-fit">PRONTO</span></div><div className="bg-slate-50 p-3 rounded-lg mt-3 text-sm space-y-1">{o.items.map((it,idx)=><div key={idx} className="flex justify-between"><span>{it.qty}x {it.name}</span><span>{formatBRL(it.price*it.qty)}</span></div>)}<div className="flex justify-between font-bold pt-2 border-t"><span>Total</span><span>{formatBRL(o.total)}</span></div></div><div className="flex gap-2 mt-4"><div className="flex-1"><label className="text-xs font-bold text-slate-500">CÓDIGO DO CLIENTE, 4 DÍGITOS</label><input value={codes[o.id]||''} onChange={e=>setCodes({...codes, [o.id]: e.target.value})} inputMode="numeric" placeholder="Ex: 1234" className="w-full border rounded-lg p-2.5 mt-1 text-center font-mono text-lg tracking-widest" /></div><button onClick={()=>confirmDelivery(o)} className="bg-blue-600 text-white px-6 rounded-lg font-bold">Entregar</button></div></div>))}</main></div>);
 }
 
 function App(){
@@ -625,88 +378,11 @@ function App(){
   const [route, setRoute] = useState(parseHash);
   const [cart, setCart] = useState([]);
   const [toast, setToast] = useState('');
-  const [unlocked, setUnlocked] = useState({});
-  function onUnlock(role){
-    if(role==='__reset_admin__'){
-      setData(prev=>({...prev, passwords:{...prev.passwords, admin:''}}));
-      setUnlocked(prev=>({...prev, admin:true}));
-      showToast('Senha do admin zerada. Defina uma nova em Senhas de acesso.');
-      return;
-    }
-    setUnlocked(prev=>({...prev, [role]:true}));
-  }
   function showToast(m){ setToast(m); setTimeout(()=>setToast(''),3000); }
   useEffect(()=>{ const onHash = ()=> setRoute(parseHash()); window.addEventListener('hashchange', onHash); return ()=> window.removeEventListener('hashchange', onHash); },[]);
-  const [loaded, setLoaded] = useState(false);
-  const lastSyncedRef = useRef('');
-  const isFetchingRef = useRef(false);
-  // Carrega do D1 na primeira abertura
-  useEffect(()=>{
-    (async ()=>{
-      try{
-        const r = await fetch('/api/sync');
-        if(r.ok){
-          const apiData = await r.json();
-          // Se o D1 já tem restaurante ou cardápio, usa ele. Se está vazio e tem dados locais, migra os locais para o D1.
-          const apiHasData = (apiData.menu && apiData.menu.length>0) || (apiData.restaurant && apiData.restaurant.name);
-          const localRaw = localStorage.getItem(KEY);
-          if(apiHasData){
-            const norm = { ...apiData, passwords: apiData.passwords || { admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' } };
-            lastSyncedRef.current = JSON.stringify(norm);
-            setData(norm);
-            try{ localStorage.setItem(KEY, JSON.stringify(norm)); }catch(e){}
-          } else if(localRaw){
-            try{
-              const localData = JSON.parse(localRaw);
-              if(localData && localData.restaurant && (localData.restaurant.name || (localData.menu||[]).length>0)){
-                await fetch('/api/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(localData) });
-                lastSyncedRef.current = JSON.stringify(localData);
-              }
-            }catch(e){}
-          }
-        }
-      }catch(e){ /* sem internet ou sem D1, usa localStorage */ }
-      setLoaded(true);
-    })();
-  },[]);
-  // Salva no D1 quando muda (com debounce) + mantém cópia local como backup
-  useEffect(()=>{
-    if(!loaded) return;
-    try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){}
-    const json = JSON.stringify(data);
-    if(json===lastSyncedRef.current) return;
-    const timer = setTimeout(async ()=>{
-      try{
-        const r = await fetch('/api/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: json });
-        if(r.ok) lastSyncedRef.current = json;
-      }catch(e){}
-    }, 600);
-    return ()=> clearTimeout(timer);
-  },[data, loaded]);
-  // Polling do D1 a cada 3s para sincronizar entre aparelhos
-  useEffect(()=>{
-    if(!loaded) return;
-    const iv = setInterval(async ()=>{
-      if(isFetchingRef.current) return;
-      isFetchingRef.current = true;
-      try{
-        const r = await fetch('/api/sync');
-        if(r.ok){
-          const apiData = await r.json();
-          const norm = { ...apiData, passwords: apiData.passwords || { admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' } };
-          const json = JSON.stringify(norm);
-          if(json!==JSON.stringify(data) && json!==lastSyncedRef.current){
-            lastSyncedRef.current = json;
-            setData(norm);
-            try{ localStorage.setItem(KEY, JSON.stringify(norm)); }catch(e){}
-          }
-        }
-      }catch(e){}
-      isFetchingRef.current = false;
-    }, 3000);
-    return ()=> clearInterval(iv);
-  },[data, loaded]);
-  return (<div>{route.view==='admin' && <AuthGate role="admin" title="Admin" passwords={data.passwords} unlocked={!!unlocked.admin} onUnlock={onUnlock}><AdminView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='cliente' && <ClientView data={data} cart={cart} setCart={setCart} showToast={showToast} setData={setData} mesaParam={route.mesa} />}{route.view==='cozinha' && <AuthGate role="cozinha" title="Cozinha" passwords={data.passwords} unlocked={!!unlocked.cozinha} onUnlock={onUnlock}><KitchenView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='entrega' && <AuthGate role="entrega" title="Entrega" passwords={data.passwords} unlocked={!!unlocked.entrega} onUnlock={onUnlock}><DeliveryView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='caixa' && <AuthGate role="caixa" title="Frente de Caixa" passwords={data.passwords} unlocked={!!unlocked.caixa} onUnlock={onUnlock}><CaixaView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='estoque' && <AuthGate role="estoque" title="Estoque" passwords={data.passwords} unlocked={!!unlocked.estoque} onUnlock={onUnlock}><EstoqueView data={data} setData={setData} showToast={showToast} /></AuthGate>}{toast && <div className="fixed top-4 right-4 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] text-sm font-semibold">{toast}</div>}</div>);
+  useEffect(()=>{ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} },[data]);
+  useEffect(()=>{ const onStorage = (e)=>{ if(e.key===KEY && e.newValue){ try{ setData(JSON.parse(e.newValue)); }catch(err){} } }; window.addEventListener('storage', onStorage); const iv = setInterval(()=>{ try{ const raw = localStorage.getItem(KEY); if(raw){ const parsed = JSON.parse(raw); if(JSON.stringify(parsed)!==JSON.stringify(data)) setData(parsed); } }catch(e){} },2000); return ()=>{ window.removeEventListener('storage', onStorage); clearInterval(iv); }; },[data]);
+  return (<div>{route.view==='admin' && <AdminView data={data} setData={setData} showToast={showToast} />}{route.view==='cliente' && <ClientView data={data} cart={cart} setCart={setCart} showToast={showToast} setData={setData} mesaParam={route.mesa} />}{route.view==='cozinha' && <KitchenView data={data} setData={setData} showToast={showToast} />}{route.view==='entrega' && <DeliveryView data={data} setData={setData} showToast={showToast} />}{route.view==='caixa' && <CaixaView data={data} setData={setData} showToast={showToast} />}{route.view==='estoque' && <EstoqueView data={data} setData={setData} showToast={showToast} />}{toast && <div className="fixed top-4 right-4 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] text-sm font-semibold">{toast}</div>}</div>);
 }
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
