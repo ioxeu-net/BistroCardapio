@@ -33,13 +33,16 @@ function loadInitial(){
         if(!Array.isArray(p.sales)) p.sales=[];
         if(!Array.isArray(p.orders)) p.orders=[];
         if(!Array.isArray(p.tables)) p.tables=[1,2,3,4];
+        if(!p.passwords) p.passwords={ admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' };
+        else { for(let k of ['admin','caixa','cozinha','entrega','estoque']) if(p.passwords[k]===undefined) p.passwords[k]=''; }
         return p;
       }
     }
   }catch(e){}
   return {
     restaurant:{ name:'', whatsapp:'', cover:'', message:'Obrigado pela preferência! Volte sempre.' },
-    menu:[], tables:[1,2,3,4], orders:[], sales:[]
+    menu:[], tables:[1,2,3,4], orders:[], sales:[],
+    passwords:{ admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' }
   };
 }
 function parseHash(){
@@ -62,6 +65,36 @@ function QRBox({ text, label }){
   useEffect(()=>{ if(!ref.current) return; ref.current.innerHTML=''; try{ new QRCode(ref.current,{ text, width:150, height:150, colorDark:'#0f172a', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M }); }catch(e){} },[text]);
   function download(){ const el = ref.current ? ref.current.querySelector('canvas, img') : null; if(!el) return; let url=''; if(el.tagName==='CANVAS') url=el.toDataURL('image/png'); else url=el.src; const a=document.createElement('a'); a.href=url; a.download='qr-'+label+'.png'; a.click(); }
   return (<div className="bg-white p-4 rounded-2xl border flex flex-col items-center"><div ref={ref} className="bg-white p-2"></div><p className="text-sm font-bold mt-2">{label}</p><p className="text-[11px] text-slate-400 break-all text-center mt-1">{text}</p><button onClick={download} className="mt-3 w-full bg-slate-900 text-white py-2 rounded-lg text-sm font-bold">Baixar QR</button></div>);
+}
+
+
+function AuthGate({ role, title, passwords, unlocked, onUnlock, children }){
+  const [input, setInput] = useState('');
+  const [error, setError] = useState('');
+  const [showReset, setShowReset] = useState(false);
+  const required = (passwords && passwords[role]) || '';
+  if(!required) return (<div><div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold px-4 py-2 text-center">Sem senha definida para {title}. Peça ao admin para definir uma senha em Admin, Senhas de acesso.</div>{children}</div>);
+  if(unlocked) return children;
+  function tryUnlock(){ if(input===required){ onUnlock(role); setError(''); } else { setError('Senha incorreta. Tente de novo.'); } }
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-100">
+      <div className="bg-white w-full max-w-sm rounded-2xl border p-6 text-center">
+        <p className="text-4xl">🔒</p>
+        <h1 className="font-extrabold text-xl mt-2">{title}</h1>
+        <p className="text-sm text-slate-500 mt-1">Digite a senha de {title.toLowerCase()} para entrar.</p>
+        <input type="password" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') tryUnlock(); }} placeholder="Senha" autoFocus className="w-full border rounded-xl p-3 mt-4 text-center text-lg tracking-widest" />
+        {error && <p className="text-sm text-red-600 font-semibold mt-2">{error}</p>}
+        <button onClick={tryUnlock} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl mt-3">Entrar</button>
+        <a href="#/cliente" className="block text-sm text-slate-500 mt-3">Sou cliente, ir para o cardápio</a>
+        {role==='admin' && (
+          <div className="mt-4 border-t pt-3">
+            {!showReset ? <button onClick={()=>setShowReset(true)} className="text-xs text-slate-400 underline">Esqueci a senha do admin</button> : <div><p className="text-xs text-amber-700 font-semibold">Quem está com o aparelho pode zerar a senha. Só use se você é o dono.</p><button onClick={()=>{ onUnlock('__reset_admin__'); }} className="mt-2 w-full bg-red-50 text-red-600 border border-red-200 font-bold py-2 rounded-lg text-sm">Zerar senha do admin e entrar</button></div>}
+          </div>
+        )}
+        <p className="text-xs text-slate-400 mt-3">A senha fica salva só neste navegador. Não é senha de banco, serve para separar as funções no dia a dia.</p>
+      </div>
+    </div>
+  );
 }
 
 function AdminView({ data, setData, showToast }){
@@ -159,6 +192,32 @@ function AdminView({ data, setData, showToast }){
           <h2 className="font-bold text-lg mb-1">3. Mesas e QR Code real</h2>
           <div className="flex gap-2 mb-4"><button onClick={addTable} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">+ Adicionar mesa</button><button onClick={resetAll} className="text-sm text-red-500 font-semibold px-3">Zerar tudo</button></div>
           <div className="grid md:grid-cols-3 gap-4">{data.tables.map(n=>(<div key={n}><QRBox text={base + '#/cliente?mesa=' + n} label={'Mesa ' + n} /><button onClick={()=>removeTable(n)} className="w-full text-center text-xs text-red-500 mt-1">Remover mesa {n}</button></div>))}</div>
+        </section>
+        <section className="bg-white p-5 rounded-2xl border">
+          <section className="bg-white p-5 rounded-2xl border">
+          <h2 className="font-bold text-lg mb-1">Senhas de acesso</h2>
+          <p className="text-sm text-slate-500 mb-4">Cliente não tem senha, é aberto. Cada função tem sua senha. Deixe vazio para deixar livre, ou coloque de 4 a 12 caracteres. Troque aqui quando alguém sair da equipe.</p>
+          <div className="grid md:grid-cols-2 gap-4">
+            {[
+              {key:'admin', label:'Admin - dono, configura tudo', hint:'Se definir, o Admin pede senha para entrar'},
+              {key:'caixa', label:'Frente de Caixa - quem vende no balcão', hint:'Só abre o caixa'},
+              {key:'cozinha', label:'Cozinha - quem prepara', hint:'Só vê pedidos pendentes'},
+              {key:'entrega', label:'Entrega - motoca', hint:'Só vê entregas prontas'},
+              {key:'estoque', label:'Estoque - quem controla estoque', hint:'Só mexe no estoque'},
+            ].map(r=>(
+              <div key={r.key} className="border rounded-xl p-3">
+                <label className="text-sm font-bold">{r.label}</label>
+                <p className="text-xs text-slate-400">{r.hint}</p>
+                <div className="flex gap-2 mt-2">
+                  <input type="password" value={(data.passwords && data.passwords[r.key]) || ''} onChange={e=>{ const v=e.target.value.replace(/\s/g,'').slice(0,12); setData(prev=>({...prev, passwords:{...prev.passwords, [r.key]: v}})); }} placeholder="Sem senha, livre" className="flex-1 border rounded-lg p-2.5" />
+                  <button onClick={()=>{ setData(prev=>({...prev, passwords:{...prev.passwords, [r.key]: ''}})); showToast('Senha de ' + r.key + ' removida'); }} className="text-xs font-bold text-red-500 border border-red-200 px-3 rounded-lg">Limpar</button>
+                </div>
+                <p className={'text-xs font-bold mt-1 ' + (((data.passwords && data.passwords[r.key]) || '').length>0 ? 'text-green-600' : 'text-amber-600')}>{((data.passwords && data.passwords[r.key]) || '').length>0 ? 'Senha definida, ' + ((data.passwords[r.key]||'').length) + ' caracteres' : 'Sem senha, entrada livre'}</p>
+              </div>
+            ))}
+          </div>
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mt-4 text-sm text-blue-900"><b>Como usar no dia a dia:</b> passe a senha do caixa só para quem fica no caixa, a da cozinha só para a cozinha, e a do admin só para o dono. Se um funcionário sair, venha aqui e troque só a senha dele, sem trocar as outras.</div>
+          <button onClick={()=>showToast('Senhas salvas automaticamente')} className="mt-3 bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold">Salvar senhas</button>
         </section>
         <section className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-4">4. Links separados</h2>
@@ -378,11 +437,21 @@ function App(){
   const [route, setRoute] = useState(parseHash);
   const [cart, setCart] = useState([]);
   const [toast, setToast] = useState('');
+  const [unlocked, setUnlocked] = useState({});
+  function onUnlock(role){
+    if(role==='__reset_admin__'){
+      setData(prev=>({...prev, passwords:{...prev.passwords, admin:''}}));
+      setUnlocked(prev=>({...prev, admin:true}));
+      showToast('Senha do admin zerada. Defina uma nova em Senhas de acesso.');
+      return;
+    }
+    setUnlocked(prev=>({...prev, [role]:true}));
+  }
   function showToast(m){ setToast(m); setTimeout(()=>setToast(''),3000); }
   useEffect(()=>{ const onHash = ()=> setRoute(parseHash()); window.addEventListener('hashchange', onHash); return ()=> window.removeEventListener('hashchange', onHash); },[]);
   useEffect(()=>{ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} },[data]);
   useEffect(()=>{ const onStorage = (e)=>{ if(e.key===KEY && e.newValue){ try{ setData(JSON.parse(e.newValue)); }catch(err){} } }; window.addEventListener('storage', onStorage); const iv = setInterval(()=>{ try{ const raw = localStorage.getItem(KEY); if(raw){ const parsed = JSON.parse(raw); if(JSON.stringify(parsed)!==JSON.stringify(data)) setData(parsed); } }catch(e){} },2000); return ()=>{ window.removeEventListener('storage', onStorage); clearInterval(iv); }; },[data]);
-  return (<div>{route.view==='admin' && <AdminView data={data} setData={setData} showToast={showToast} />}{route.view==='cliente' && <ClientView data={data} cart={cart} setCart={setCart} showToast={showToast} setData={setData} mesaParam={route.mesa} />}{route.view==='cozinha' && <KitchenView data={data} setData={setData} showToast={showToast} />}{route.view==='entrega' && <DeliveryView data={data} setData={setData} showToast={showToast} />}{route.view==='caixa' && <CaixaView data={data} setData={setData} showToast={showToast} />}{route.view==='estoque' && <EstoqueView data={data} setData={setData} showToast={showToast} />}{toast && <div className="fixed top-4 right-4 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] text-sm font-semibold">{toast}</div>}</div>);
+  return (<div>{route.view==='admin' && <AuthGate role="admin" title="Admin" passwords={data.passwords} unlocked={!!unlocked.admin} onUnlock={onUnlock}><AdminView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='cliente' && <ClientView data={data} cart={cart} setCart={setCart} showToast={showToast} setData={setData} mesaParam={route.mesa} />}{route.view==='cozinha' && <AuthGate role="cozinha" title="Cozinha" passwords={data.passwords} unlocked={!!unlocked.cozinha} onUnlock={onUnlock}><KitchenView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='entrega' && <AuthGate role="entrega" title="Entrega" passwords={data.passwords} unlocked={!!unlocked.entrega} onUnlock={onUnlock}><DeliveryView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='caixa' && <AuthGate role="caixa" title="Frente de Caixa" passwords={data.passwords} unlocked={!!unlocked.caixa} onUnlock={onUnlock}><CaixaView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='estoque' && <AuthGate role="estoque" title="Estoque" passwords={data.passwords} unlocked={!!unlocked.estoque} onUnlock={onUnlock}><EstoqueView data={data} setData={setData} showToast={showToast} /></AuthGate>}{toast && <div className="fixed top-4 right-4 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] text-sm font-semibold">{toast}</div>}</div>);
 }
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
