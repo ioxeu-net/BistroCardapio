@@ -10,7 +10,7 @@ function toFrontOrder(r) {
   return { id: String(r.id), type: r.type, table: r.table_no || null, status: r.status, customerName: r.customer_name || '', phone: r.phone || '', address: r.address || '', code: r.code || '', items: JSON.parse(r.items_json || '[]'), subtotal: r.subtotal || 0, service: r.service || 0, total: r.total || 0, createdAt: r.created_at || Date.now() };
 }
 function toFrontSale(r) {
-  return { id: String(r.id), items: JSON.parse(r.items_json || '[]'), total: r.total || 0, payment: r.payment || 'pix', paid: r.paid || 0, change: r.change_amount || 0, createdAt: r.created_at || Date.now() };
+  return { id: String(r.id), items: JSON.parse(r.items_json || '[]'), total: r.total || 0, payment: r.payment || 'pix', paid: r.paid || 0, change: r.change_amount || 0, createdAt: r.created_at || Date.now(), orderId: r.order_id || r.orderId || undefined, origin: r.origin || undefined };
 }
 
 export async function onRequestGet({ env }) {
@@ -20,6 +20,9 @@ export async function onRequestGet({ env }) {
   const salesRes = await env.DB.prepare("SELECT * FROM sales ORDER BY created_at DESC LIMIT 200").all();
   const passRes = await env.DB.prepare("SELECT * FROM passwords").all();
   const tablesRow = await env.DB.prepare("SELECT value FROM settings WHERE key = 'tables'").first();
+  const closingsRow = await env.DB.prepare("SELECT value FROM settings WHERE key = 'closings'").first();
+  let closings = [];
+  try { closings = JSON.parse(closingsRow?.value || '[]'); } catch(e) {}
   let tables = [1,2,3,4];
   try { tables = JSON.parse(tablesRow?.value || '[1,2,3,4]'); } catch(e) {}
   const passwords = { admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' };
@@ -30,6 +33,7 @@ export async function onRequestGet({ env }) {
     tables,
     orders: (ordersRes.results || []).map(toFrontOrder),
     sales: (salesRes.results || []).map(toFrontSale),
+    closings,
     passwords
   });
 }
@@ -39,8 +43,9 @@ export async function onRequestPost({ request, env }) {
   const stmts = [];
   // restaurant
   stmts.push(env.DB.prepare("INSERT OR REPLACE INTO restaurant (id, name, whatsapp, cover, message) VALUES (1, ?, ?, ?, ?)").bind(d.restaurant?.name || '', (d.restaurant?.whatsapp || '').slice(0,11), d.restaurant?.cover || '', d.restaurant?.message || ''));
-  // settings tables
+  // settings tables + closings
   stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('tables', ?)").bind(JSON.stringify(d.tables || [1,2,3,4])));
+  stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('closings', ?)").bind(JSON.stringify(d.closings || [])));
   // passwords
   for (const role of ['admin','caixa','cozinha','entrega','estoque']) {
     stmts.push(env.DB.prepare("INSERT OR REPLACE INTO passwords (role, password) VALUES (?, ?)").bind(role, (d.passwords?.[role] || '').slice(0,12)));
