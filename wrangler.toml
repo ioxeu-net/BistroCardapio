@@ -1,0 +1,9 @@
+# BistroCardapio - Cloudflare Pages + D1
+# ID do banco D1 que você criou: a720208a-7caf-4269-a71c-685f1aa3803c
+name = "bistrocardapio"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bistro-db"
+database_id = "a720208a-7caf-4269-a71c-685f1aa3803c"
