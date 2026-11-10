@@ -106,6 +106,39 @@ function AdminView({ data, setData, showToast }){
   const tabIndex = tabsList.findIndex(x=>x.id===tab);
   const goPrevTab = ()=>{ if(tabIndex>0) setTab(tabsList[tabIndex-1].id); else goBack(); };
   const goNextTab = ()=>{ if(tabIndex<tabsList.length-1) setTab(tabsList[tabIndex+1].id); };
+  const [manualType, setManualType] = useState('mesa');
+  const [manualTable, setManualTable] = useState('1');
+  const [manualName, setManualName] = useState('');
+  const [manualPhone, setManualPhone] = useState('');
+  const [manualAddress, setManualAddress] = useState('');
+  const [manualItems, setManualItems] = useState({});
+  const [manualSearch, setManualSearch] = useState('');
+  const manualFiltered = data.menu.filter(m=> m.active!==false && m.name.toLowerCase().includes(manualSearch.toLowerCase()));
+  const manualDetailed = Object.entries(manualItems).map(([id, qty])=>{ const it = data.menu.find(m=> String(m.id)===String(id)); return it ? {...it, qty} : null; }).filter(Boolean);
+  const manualSubtotal = manualDetailed.reduce((a,i)=>a+i.price*i.qty,0);
+  const manualService = manualType==='mesa' ? manualSubtotal*0.10 : 0;
+  const manualTotal = manualSubtotal + manualService;
+  function changeManualQty(id, delta){
+    const it = data.menu.find(m=> String(m.id)===String(id));
+    setManualItems(prev=>{
+      const cur = prev[id] || 0;
+      const next = cur + delta;
+      if(next<=0){ const n={...prev}; delete n[id]; return n; }
+      if(next > (it?.stock ?? 0) + cur){ showToast('Sem estoque para ' + (it?.name || '')); return prev; }
+      return {...prev, [id]: next};
+    });
+  }
+  function createManualOrder(){
+    if(manualDetailed.length===0){ showToast('Adicione pelo menos 1 item do cardápio'); return; }
+    if(manualType==='mesa' && !manualTable){ showToast('Escolha a mesa'); return; }
+    if(manualType==='delivery' && !manualName.trim()){ showToast('Coloque o nome do cliente'); return; }
+    const id = String(Date.now()).slice(-6);
+    const code = String(Math.floor(1000 + Math.random()*9000));
+    const order = { id, table: manualType==='mesa' ? manualTable : null, type: manualType==='mesa' ? 'mesa' : 'delivery', status:'pending', createdAt: Date.now(), code, customerName: manualName, phone: manualPhone, address: manualAddress, items: manualDetailed.map(i=>({ name:i.name, price:i.price, qty:i.qty })), subtotal: manualSubtotal, service: manualService, total: manualTotal };
+    setData(prev=>({...prev, orders:[...prev.orders, order], menu: prev.menu.map(m=>{ const sold = manualDetailed.find(c=> String(c.id)===String(m.id)); if(!sold) return m; return {...m, stock: Math.max(0, (m.stock ?? 0) - sold.qty)}; })}));
+    setManualItems({}); setManualName(''); setManualPhone(''); setManualAddress(''); setManualSearch('');
+    showToast('Pedido #' + id + ' criado e já foi para a cozinha');
+  }
   const base = window.location.href.split('#')[0];
   const links = [
     { label:'Cliente', url: base + '#/cliente', desc:'Cardápio para o cliente' },
@@ -240,6 +273,44 @@ function AdminView({ data, setData, showToast }){
         </section>
         <section style={{display: tab==='pedidos' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
           <div className="flex justify-between items-center mb-3"><h2 className="font-bold text-lg">5. Pedidos do cardápio</h2><div className="flex gap-2"><button onClick={clearFinished} className="text-sm font-semibold border px-3 py-1.5 rounded-lg">Limpar finalizados</button><button onClick={clearAllOrders} className="text-sm font-semibold text-red-500 border border-red-200 px-3 py-1.5 rounded-lg">Apagar todos</button></div></div>
+          <div className="bg-slate-50 border rounded-2xl p-4 mb-4">
+            <p className="font-bold">Criar pedido manual</p>
+            <p className="text-xs text-slate-500">Os campos já vêm com os nomes do cardápio. Quando você cadastra um item em Cardápio, ele aparece aqui sozinho, sem precisar digitar de novo.</p>
+            <div className="flex gap-2 mt-3">
+              <button onClick={()=>setManualType('mesa')} className={'flex-1 py-2.5 rounded-xl font-bold text-sm ' + (manualType==='mesa' ? 'bg-slate-900 text-white' : 'bg-white border')}>Mesa</button>
+              <button onClick={()=>setManualType('delivery')} className={'flex-1 py-2.5 rounded-xl font-bold text-sm ' + (manualType==='delivery' ? 'bg-slate-900 text-white' : 'bg-white border')}>Entrega</button>
+            </div>
+            {manualType==='mesa' ? (
+              <div className="grid md:grid-cols-2 gap-3 mt-3">
+                <div><label className="text-sm font-semibold">Mesa</label><select value={manualTable} onChange={e=>setManualTable(e.target.value)} className="w-full border rounded-lg p-2.5 mt-1 bg-white">{data.tables.map(n=>(<option key={n} value={n}>Mesa {n}</option>))}</select></div>
+                <div><label className="text-sm font-semibold">Nome do cliente (opcional)</label><input value={manualName} onChange={e=>setManualName(e.target.value)} placeholder="Ex: João" className="w-full border rounded-lg p-2.5 mt-1" /></div>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-3 gap-3 mt-3">
+                <div><label className="text-sm font-semibold">Nome do cliente</label><input value={manualName} onChange={e=>setManualName(e.target.value)} placeholder="Ex: Maria" className="w-full border rounded-lg p-2.5 mt-1" /></div>
+                <div><label className="text-sm font-semibold">Telefone</label><input value={manualPhone} onChange={e=>setManualPhone(e.target.value.replace(/\D/g,'').slice(0,11))} placeholder="17999999999" className="w-full border rounded-lg p-2.5 mt-1" /></div>
+                <div><label className="text-sm font-semibold">Endereço</label><input value={manualAddress} onChange={e=>setManualAddress(e.target.value)} placeholder="Rua, número, bairro" className="w-full border rounded-lg p-2.5 mt-1" /></div>
+              </div>
+            )}
+            <input value={manualSearch} onChange={e=>setManualSearch(e.target.value)} placeholder="Buscar no cardápio..." className="w-full border rounded-lg p-2.5 mt-3 bg-white" />
+            {data.menu.length===0 ? (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">Cardápio vazio. Vá em Cardápio, cadastre um item e ele vai aparecer aqui automaticamente.</p>
+            ) : manualFiltered.length===0 ? (
+              <p className="text-sm text-slate-500 mt-3">Nenhum item com esse nome.</p>
+            ) : (
+              <div className="space-y-2 mt-3 max-h-72 overflow-y-auto">
+                {manualFiltered.map(m=>{
+                  const qty = manualItems[m.id] || 0;
+                  return (<div key={m.id} className="flex items-center justify-between bg-white border rounded-xl p-3"><div><p className="font-bold">{m.name} <span className="text-xs font-normal text-slate-400">• Estoque: {m.stock ?? 0}</span></p><p className="text-sm text-slate-500">{formatBRL(m.price)}</p></div><div className="flex items-center gap-2"><button onClick={()=>changeManualQty(m.id, -1)} className="w-8 h-8 rounded-full bg-slate-100 font-bold">-</button><span className="font-bold w-6 text-center">{qty}</span><button onClick={()=>changeManualQty(m.id, 1)} className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold">+</button></div></div>);
+                })}
+              </div>
+            )}
+            <div className="flex justify-between items-center mt-4">
+              <div><p className="text-xs text-slate-500">Subtotal {formatBRL(manualSubtotal)} {manualType==='mesa' ? '+ 10% serviço ' + formatBRL(manualService) : ''}</p><p className="font-extrabold text-lg">Total {formatBRL(manualTotal)}</p></div>
+              <button onClick={createManualOrder} className="bg-green-600 text-white px-5 py-3 rounded-xl font-bold text-sm">Criar pedido</button>
+            </div>
+          </div>
+          <p className="font-bold mb-2">Pedidos recebidos</p>
           {data.orders.length===0 && <p className="text-sm text-slate-400">Nenhum pedido ainda.</p>}
           <div className="space-y-2">{[...data.orders].reverse().map(o=>(<div key={o.id} className="border rounded-xl p-3 flex justify-between"><div><p className="font-bold">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega' : 'Mesa ' + o.table}</p><p className="text-xs text-slate-500">{timeOf(o.createdAt)} • {o.items.map(i=> i.qty + 'x ' + i.name).join(', ')}</p><p className="text-sm font-bold mt-1">{formatBRL(o.total)}</p></div><span className="text-xs font-bold h-fit px-2 py-1 rounded-full bg-slate-100">{o.status}</span></div>))}</div>
         </section>
