@@ -113,7 +113,9 @@ function AdminView({ data, setData, showToast }){
   const [manualAddress, setManualAddress] = useState('');
   const [manualItems, setManualItems] = useState({});
   const [manualSearch, setManualSearch] = useState('');
-  const manualFiltered = data.menu.filter(m=> m.active!==false && m.name.toLowerCase().includes(manualSearch.toLowerCase()));
+  const [manualCat, setManualCat] = useState('Todos');
+  const manualCats = ['Todos', ...new Set(data.menu.filter(m=> m.active!==false).map(m=> m.category || 'Geral'))];
+  const manualFiltered = data.menu.filter(m=> m.active!==false && m.name.toLowerCase().includes(manualSearch.toLowerCase()) && (manualCat==='Todos' || (m.category || 'Geral')===manualCat));
   const manualDetailed = Object.entries(manualItems).map(([id, qty])=>{ const it = data.menu.find(m=> String(m.id)===String(id)); return it ? {...it, qty} : null; }).filter(Boolean);
   const manualSubtotal = manualDetailed.reduce((a,i)=>a+i.price*i.qty,0);
   const manualService = manualType==='mesa' ? manualSubtotal*0.10 : 0;
@@ -124,7 +126,7 @@ function AdminView({ data, setData, showToast }){
       const cur = prev[id] || 0;
       const next = cur + delta;
       if(next<=0){ const n={...prev}; delete n[id]; return n; }
-      if(next > (it?.stock ?? 0) + cur){ showToast('Sem estoque para ' + (it?.name || '')); return prev; }
+      if(next > (it?.stock ?? 0)){ showToast('Sem estoque para ' + (it?.name || '') + '. Só tem ' + (it?.stock ?? 0)); return prev; }
       return {...prev, [id]: next};
     });
   }
@@ -293,16 +295,36 @@ function AdminView({ data, setData, showToast }){
               </div>
             )}
             <input value={manualSearch} onChange={e=>setManualSearch(e.target.value)} placeholder="Buscar no cardápio..." className="w-full border rounded-lg p-2.5 mt-3 bg-white" />
+            <div className="flex gap-2 mt-3 overflow-x-auto">
+              {manualCats.map(c=>(<button key={c} onClick={()=>setManualCat(c)} className={'px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap ' + (manualCat===c ? 'bg-slate-900 text-white' : 'bg-white border')}>{c}</button>))}
+            </div>
             {data.menu.length===0 ? (
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">Cardápio vazio. Vá em Cardápio, cadastre um item e ele vai aparecer aqui automaticamente.</p>
             ) : manualFiltered.length===0 ? (
-              <p className="text-sm text-slate-500 mt-3">Nenhum item com esse nome.</p>
+              <p className="text-sm text-slate-500 mt-3">Nenhum item nessa categoria.</p>
             ) : (
-              <div className="space-y-2 mt-3 max-h-72 overflow-y-auto">
-                {manualFiltered.map(m=>{
-                  const qty = manualItems[m.id] || 0;
-                  return (<div key={m.id} className="flex items-center justify-between bg-white border rounded-xl p-3"><div><p className="font-bold">{m.name} <span className="text-xs font-normal text-slate-400">• Estoque: {m.stock ?? 0}</span></p><p className="text-sm text-slate-500">{formatBRL(m.price)}</p></div><div className="flex items-center gap-2"><button onClick={()=>changeManualQty(m.id, -1)} className="w-8 h-8 rounded-full bg-slate-100 font-bold">-</button><span className="font-bold w-6 text-center">{qty}</span><button onClick={()=>changeManualQty(m.id, 1)} className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold">+</button></div></div>);
-                })}
+              <div className="space-y-4 mt-3 max-h-96 overflow-y-auto">
+                {[...new Set(manualFiltered.map(m=> m.category || 'Geral'))].map(cat=>(
+                  <div key={cat}>
+                    <p className="font-bold text-sm mb-2">{cat}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {manualFiltered.filter(m=> (m.category || 'Geral')===cat).map(m=>{
+                        const qty = manualItems[m.id] || 0;
+                        const selected = qty>0;
+                        const outOfStock = (m.stock ?? 0) <= 0;
+                        return (
+                          <div key={m.id} onClick={()=>{ if(!outOfStock) changeManualQty(m.id, 1); }} className={'cursor-pointer text-left p-3 rounded-xl border-2 ' + (selected ? 'border-green-500 bg-green-50' : outOfStock ? 'border-slate-200 bg-slate-100 opacity-60' : 'border-slate-200 bg-white')}>
+                            <div className="flex justify-between items-start gap-1"><p className="font-bold text-sm leading-tight">{m.name}</p>{selected && <span className="bg-green-600 text-white text-xs font-bold px-2 py-0.5 rounded-full shrink-0">{qty}x ✓</span>}</div>
+                            <p className="text-sm text-slate-600 mt-1">{formatBRL(m.price)}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{outOfStock ? 'Esgotado' : 'Estoque: ' + (m.stock ?? 0)}</p>
+                            <p className="text-xs font-bold mt-1 text-slate-500">{selected ? 'Clique de novo para +1' : 'Clique para selecionar'}</p>
+                            {selected && <div className="flex gap-2 mt-2" onClick={e=>e.stopPropagation()}><button onClick={()=>changeManualQty(m.id, -1)} className="flex-1 bg-white border rounded-lg py-1.5 text-sm font-bold">- 1</button><button onClick={()=>{ setManualItems(prev=>{ const n={...prev}; delete n[m.id]; return n; }); }} className="flex-1 bg-red-50 text-red-600 border border-red-200 rounded-lg py-1.5 text-sm font-bold">Remover</button></div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
             <div className="flex justify-between items-center mt-4">
