@@ -143,13 +143,21 @@ function AdminView({ data, setData, showToast }){
   }
   const base = window.location.href.split('#')[0];
   const links = [
-    { label:'Cliente', url: base + '#/cliente', desc:'Cardápio para o cliente' },
-    { label:'Frente de Caixa', url: base + '#/caixa', desc:'PDV rápido para venda no balcão' },
-    { label:'Cozinha', url: base + '#/cozinha', desc:'Só pedidos pendentes' },
-    { label:'Entrega', url: base + '#/entrega', desc:'Só entregas prontas' },
-    { label:'Estoque', url: base + '#/estoque', desc:'Controla quantidade de cada item' },
-    { label:'Admin', url: base + '#/admin', desc:'Configurações' },
+    { label:'Cliente', url: base + '#/cliente', desc:'Cardápio para o cliente pedir pelo celular', onde:'Onde usar: Celular do cliente, QR colado na mesa' },
+    { label:'Frente de Caixa', url: base + '#/caixa', desc:'PDV rápido para venda no balcão, cobra e libera pedidos', onde:'Onde usar: Computador do caixa, no balcão' },
+    { label:'Cozinha', url: base + '#/cozinha', desc:'Só pedidos pendentes para preparar', onde:'Onde usar: Tablet ou celular da cozinha' },
+    { label:'Entrega', url: base + '#/entrega', desc:'Só entregas liberadas pelo caixa', onde:'Onde usar: Celular do motoca, do entregador' },
+    { label:'Estoque', url: base + '#/estoque', desc:'Controla quantidade de cada item', onde:'Onde usar: Celular ou computador de quem controla o estoque' },
+    { label:'Admin', url: base + '#/admin', desc:'Configurações do dono, cardápio, mesas e senhas', onde:'Onde usar: Só o dono, no celular ou computador do dono' },
   ];
+  function printQR(l){
+    const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(l.url);
+    const w = window.open('', '_blank');
+    if(!w){ showToast('Libere pop-up para imprimir o QR'); return; }
+    w.document.write('<html><head><title>' + l.label + ' - BistroCardapio</title><style>body{font-family:sans-serif;text-align:center;padding:24px} img{width:280px;height:280px;border:1px solid #ddd;padding:8px} h1{font-size:22px;margin:0} h2{font-size:28px;margin:8px 0} p{font-size:14px;color:#555} .onde{font-weight:bold;color:#111} .url{word-break:break-all;font-size:12px}</style></head><body><h1>' + (data.restaurant.name || 'BistroCardapio') + '</h1><h2>' + l.label + '</h2><p class="onde">' + l.onde + '</p><img src="' + qr + '"/><p>Escaneie para abrir</p><p class="url">' + l.url + '</p></body></html>');
+    w.document.close();
+    setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 600);
+  }
   function updateRestaurant(f,v){ setData(prev=>({...prev, restaurant:{...prev.restaurant, [f]:v}})); }
   function saveMenuItem(){
     if(!form.name.trim()){ showToast('Coloque o nome do item'); return; }
@@ -182,7 +190,7 @@ function AdminView({ data, setData, showToast }){
     <div className="min-h-screen">
       <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-5xl mx-auto flex justify-between items-center"><div className="flex items-center gap-3"><button onClick={goPrevTab} className="bg-white/10 px-3 py-2 rounded-lg text-sm font-bold">← Voltar</button><div><p className="font-extrabold text-lg">Bistro<span className="text-orange-500">Cardapio</span></p><p className="text-xs text-slate-400">Painel real, sem dados de demonstração</p></div></div><div className="flex gap-2"><a href="#/caixa" className="bg-green-600 px-4 py-2 rounded-lg text-sm font-bold">Abrir Caixa</a><a href="#/estoque" className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold">Estoque</a></div></div></header>
       <main className="max-w-5xl mx-auto p-4 space-y-6 pb-20">
-        {!data.restaurant.name && (<div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl"><p className="font-bold text-amber-900">Comece aqui: cadastre o restaurante abaixo.</p><p className="text-sm text-amber-800 mt-1">Sem nome e sem cardápio, o cliente vê uma tela vazia de verdade, não um restaurante fake.</p></div>)}
+
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white p-4 rounded-2xl border"><p className="text-xs font-bold text-slate-400">VENDAS HOJE</p><p className="font-extrabold text-xl mt-1">{formatBRL(todayTotal)}</p><p className="text-xs text-slate-500">{todaySales.length} vendas no caixa</p></div>
           <div className="bg-white p-4 rounded-2xl border"><p className="text-xs font-bold text-slate-400">PEDIDOS</p><p className="font-extrabold text-xl mt-1">{data.orders.length}</p><p className="text-xs text-slate-500">Total de pedidos do cardápio</p></div>
@@ -270,8 +278,28 @@ function AdminView({ data, setData, showToast }){
           <button onClick={()=>showToast('Senhas salvas automaticamente')} className="mt-3 bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold">Salvar senhas</button>
         </section>
         <section style={{display: tab==='links' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
-          <h2 className="font-bold text-lg mb-4">4. Links separados</h2>
-          <div className="space-y-3">{links.map(l=>(<div key={l.label} className="flex flex-col md:flex-row md:items-center gap-2 border rounded-xl p-3"><div className="flex-1"><p className="font-bold">{l.label}</p><p className="text-xs text-slate-500">{l.desc}</p><p className="text-xs break-all text-blue-600 mt-1">{l.url}</p></div><button onClick={()=>copyLink(l.url)} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar</button><a href={l.url} className="text-center border px-4 py-2 rounded-lg text-sm font-semibold">Abrir</a></div>))}</div>
+          <h2 className="font-bold text-lg mb-1">4. Links separados</h2>
+          <p className="text-sm text-slate-500 mb-4">Cada link abre só a tela daquela pessoa, com o nome de onde usar. Copia o link ou imprime o QR e cola onde usa.</p>
+          <div className="space-y-3">{links.map(l=>(
+            <div key={l.label} className="flex flex-col md:flex-row gap-3 border rounded-2xl p-3">
+              <div className="flex flex-col items-center shrink-0">
+                <img src={'https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=' + encodeURIComponent(l.url)} alt={'QR ' + l.label} className="w-[110px] h-[110px] border rounded-lg bg-white p-1" />
+                <p className="text-[11px] font-bold text-slate-500 mt-1">QR de {l.label}</p>
+              </div>
+              <div className="flex-1">
+                <p className="font-extrabold text-lg">{l.label}</p>
+                <p className="text-xs font-bold text-orange-600">{l.onde}</p>
+                <p className="text-sm text-slate-500 mt-0.5">{l.desc}</p>
+                <p className="text-xs break-all text-blue-600 mt-1">{l.url}</p>
+              </div>
+              <div className="flex md:flex-col gap-2 shrink-0">
+                <button onClick={()=>copyLink(l.url)} className="flex-1 md:flex-none bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold">📋 Copiar link</button>
+                <a href={l.url} className="flex-1 md:flex-none text-center border px-4 py-2.5 rounded-lg text-sm font-semibold">Abrir</a>
+                <button onClick={()=>printQR(l)} className="flex-1 md:flex-none bg-white border-2 border-slate-900 px-4 py-2.5 rounded-lg text-sm font-bold">🖨️ Imprimir QR</button>
+              </div>
+            </div>
+          ))}</div>
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mt-4 text-sm text-blue-900"><b>Como usar:</b> Cliente vai no QR da mesa, Caixa fica aberto no computador do caixa, Cozinha no tablet da cozinha, Entrega no celular do motoca, Estoque em quem controla, Admin só no dono.</div>
         </section>
         <section style={{display: tab==='pedidos' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
           <div className="flex justify-between items-center mb-3"><h2 className="font-bold text-lg">5. Pedidos do cardápio</h2><div className="flex gap-2"><button onClick={clearFinished} className="text-sm font-semibold border px-3 py-1.5 rounded-lg">Limpar finalizados</button><button onClick={clearAllOrders} className="text-sm font-semibold text-red-500 border border-red-200 px-3 py-1.5 rounded-lg">Apagar todos</button></div></div>
