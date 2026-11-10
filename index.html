@@ -34,7 +34,7 @@ function loadInitial(){
         if(!Array.isArray(p.closings)) p.closings=[];
         if(!Array.isArray(p.orders)) p.orders=[];
         // Deduplica IDs repetidos (bug antigo do slice(-6)): mantém o mais novo, dá ID novo para o duplicado
-        { const seen = new Set(); p.orders = p.orders.map(o=>{ if(seen.has(String(o.id)) return {...o, id: String(Date.now()).slice(-6) + String(Math.floor(10 + Math.random()*90)), _dupFix: true}; seen.add(String(o.id)); return o; }); }
+        { const seen = new Set(); p.orders = p.orders.map(o=>{ if(seen.has(String(o.id))) return {...o, id: String(Date.now()).slice(-6) + String(Math.floor(10 + Math.random()*90)), _dupFix: true}; seen.add(String(o.id)); return o; }); }
         if(!Array.isArray(p.tables)) p.tables=[1,2,3,4];
         if(!p.passwords) p.passwords={ admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' };
         else { for(let k of ['admin','caixa','cozinha','entrega','estoque']) if(p.passwords[k]===undefined) p.passwords[k]=''; }
