@@ -58,6 +58,7 @@ function parseHash(){
 }
 function goBack(){ if(window.history.length>1) window.history.back(); else window.location.hash='#/admin'; }
 function formatBRL(v){ return 'R$ ' + Number(v||0).toFixed(2).replace('.',','); }
+function genId(){ return genId() + String(Math.floor(10 + Math.random()*90)); }
 function timeOf(ts){ try{ return new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
 function dateOf(ts){ try{ return new Date(ts).toLocaleDateString('pt-BR'); }catch(e){ return ''; } }
 function readFileAsDataURL(file, cb){ const r=new FileReader(); r.onload=function(e){cb(e.target.result);}; r.readAsDataURL(file); }
@@ -100,6 +101,8 @@ function AuthGate({ role, title, passwords, unlocked, onUnlock, children }){
 }
 
 function AdminView({ data, setData, showToast }){
+  const busyRef = useRef(false);
+  function tryLock(){ if(busyRef.current) return false; busyRef.current=true; setTimeout(()=>{ busyRef.current=false; }, 900); return true; }
   const [form, setForm] = useState({ name:'', desc:'', price:'', category:'Geral', img:'', active:true, stock:'10', minStock:'5' });
   const [editingId, setEditingId] = useState(null);
   const [tab, setTab] = useState('restaurante');
@@ -132,12 +135,13 @@ function AdminView({ data, setData, showToast }){
     });
   }
   function createManualOrder(){
+    if(!tryLock()){ showToast('Calma, já estou criando o pedido...'); return; }
     if(manualDetailed.length===0){ showToast('Adicione pelo menos 1 item do cardápio'); return; }
     if(manualType==='mesa' && !manualTable){ showToast('Escolha a mesa'); return; }
     if(manualType==='delivery' && !manualName.trim()){ showToast('Coloque o nome do cliente'); return; }
-    const id = String(Date.now()).slice(-6);
+    const id = genId();
     const code = String(Math.floor(1000 + Math.random()*9000));
-    const order = { id, table: manualType==='mesa' ? manualTable : null, type: manualType==='mesa' ? 'mesa' : 'delivery', status:'pending', createdAt: Date.now(), code, customerName: manualName, phone: manualPhone, address: manualAddress, items: manualDetailed.map(i=>({ name:i.name, price:i.price, qty:i.qty })), subtotal: manualSubtotal, service: manualService, total: manualTotal };
+    const order = { id, table: manualType==='mesa' ? manualTable : null, type: manualType==='mesa' ? 'mesa' : 'delivery', status:'pending', createdAt: Date.now(), code, customerName: manualName, phone: manualPhone, address: manualAddress, items: manualDetailed.map(i=>({ id:i.id, name:i.name, price:i.price, qty:i.qty })), subtotal: manualSubtotal, service: manualService, total: manualTotal };
     setData(prev=>({...prev, orders:[...prev.orders, order], menu: prev.menu.map(m=>{ const sold = manualDetailed.find(c=> String(c.id)===String(m.id)); if(!sold) return m; return {...m, stock: Math.max(0, (m.stock ?? 0) - sold.qty)}; })}));
     setManualItems({}); setManualName(''); setManualPhone(''); setManualAddress(''); setManualSearch('');
     showToast('Pedido #' + id + ' criado e já foi para a cozinha');
@@ -161,10 +165,15 @@ function AdminView({ data, setData, showToast }){
   }
   function updateRestaurant(f,v){ setData(prev=>({...prev, restaurant:{...prev.restaurant, [f]:v}})); }
   function saveMenuItem(){
+    if(!tryLock()){ showToast('Calma, já estou salvando...'); return; }
     if(!form.name.trim()){ showToast('Coloque o nome do item'); return; }
     const price = parseFloat(String(form.price).replace(',','.')) || 0;
     const stock = parseInt(form.stock) || 0;
     const minStock = parseInt(form.minStock) || 0;
+    if(price < 0){ showToast('Preço não pode ser negativo'); return; }
+    if(stock < 0){ showToast('Estoque não pode ser negativo'); return; }
+    if(minStock < 0){ showToast('Mínimo não pode ser negativo'); return; }
+    if(price > 100000){ showToast('Preço muito alto, confere?'); return; }
     if(editingId){
       setData(prev=>({...prev, menu: prev.menu.map(m=> m.id===editingId ? {...m, name:form.name, desc:form.desc, price, category:form.category||'Geral', img:form.img, active:form.active, stock, minStock} : m)}));
       showToast('Item atualizado');
@@ -182,9 +191,9 @@ function AdminView({ data, setData, showToast }){
   function addTable(){ const next = data.tables.length ? Math.max(...data.tables)+1 : 1; setData(prev=>({...prev, tables:[...prev.tables, next]})); }
   function removeTable(n){ setData(prev=>({...prev, tables: prev.tables.filter(t=>t!==n)})); }
   function copyLink(url){ navigator.clipboard.writeText(url).then(()=> showToast('Link copiado')); }
-  function clearFinished(){ setData(prev=>({...prev, orders: prev.orders.filter(o=> o.status==='pending' || o.status==='ready')})); showToast('Pedidos finalizados limpos'); }
-  function clearAllOrders(){ if(confirm('Apagar todos os pedidos?')) setData(prev=>({...prev, orders:[]})); }
-  function resetAll(){ if(confirm('Apagar tudo e começar do zero?')){ localStorage.removeItem(KEY); setData({ restaurant:{ name:'', whatsapp:'', cover:'', message:'Obrigado pela preferência! Volte sempre.' }, menu:[], tables:[1,2,3,4], orders:[], sales:[] }); } }
+  function clearFinished(){ setData(prev=>({...prev, orders: prev.orders.filter(o=> o.status==='pending' || o.status==='ready' || o.status==='awaiting_delivery')})); showToast('Pedidos finalizados limpos'); }
+  function clearAllOrders(){ if(confirm('Apagar todos os pedidos? O estoque dos pedidos pendentes e prontos vai voltar.')) setData(prev=>{ const restored = prev.menu.map(m=>{ let add = 0; prev.orders.forEach(o=>{ if(o.status==='pending' || o.status==='ready' || o.status==='awaiting_delivery'){ (o.items||[]).forEach(it=>{ const match = (it.id && String(it.id)===String(m.id)) || it.name===m.name; if(match) add += it.qty; }); } }); return add>0 ? {...m, stock:(m.stock ?? 0)+add} : m; }); return {...prev, orders:[], menu: restored}; }); }
+  function resetAll(){ if(confirm('Apagar tudo e começar do zero? Isso apaga cardápio, pedidos, vendas e fechamentos.')){ localStorage.removeItem(KEY); setData({ restaurant:{ name:'', whatsapp:'', cover:'', message:'Obrigado pela preferência! Volte sempre.' }, menu:[], tables:[1,2,3,4], orders:[], sales:[], closings:[], passwords:{ admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' } }); } }
   const todaySales = (data.sales||[]).filter(s=> dateOf(s.createdAt)===dateOf(Date.now()));
   const todayTotal = todaySales.reduce((a,s)=>a+s.total,0);
   return (
@@ -382,6 +391,8 @@ function AdminView({ data, setData, showToast }){
 }
 
 function CaixaView({ data, setData, showToast }){
+  const busyRef = useRef(false);
+  function tryLock(){ if(busyRef.current) return false; busyRef.current=true; setTimeout(()=>{ busyRef.current=false; }, 900); return true; }
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState([]);
   const [payment, setPayment] = useState('pix');
@@ -397,26 +408,30 @@ function CaixaView({ data, setData, showToast }){
   const change = payment==='dinheiro' ? Math.max(0, paidNum - total) : 0;
   function addItem(m){
     if((m.stock ?? 0) <= 0){ showToast(m.name + ' está sem estoque'); return; }
-    const inCart = cart.find(x=>x.id===m.id)?.qty || 0;
-    if(inCart + 1 > (m.stock ?? 0)){ showToast('Estoque insuficiente para ' + m.name + '. Tem ' + m.stock + ' em estoque.'); return; }
-    setCart(prev=>{ const ex = prev.find(x=>x.id===m.id); if(ex) return prev.map(x=> x.id===m.id ? {...x, qty:x.qty+1} : x); return [...prev, {id:m.id, qty:1}]; });
+    setCart(prev=>{ const inCart = prev.find(x=>x.id===m.id)?.qty || 0; if(inCart + 1 > (m.stock ?? 0)){ showToast('Estoque insuficiente para ' + m.name + '. Tem ' + m.stock + ' em estoque.'); return prev; } const ex = prev.find(x=>x.id===m.id); if(ex) return prev.map(x=> x.id===m.id ? {...x, qty:x.qty+1} : x); return [...prev, {id:m.id, qty:1}]; });
   }
   function changeQty(id, delta){
     setCart(prev=> prev.map(x=>{ if(x.id!==id) return x; const it = data.menu.find(m=>m.id===id); const next = x.qty+delta; if(next > (it?.stock ?? 0)){ showToast('Sem estoque suficiente'); return x; } return {...x, qty:next}; }).filter(x=>x.qty>0));
   }
   function finalize(){
+    if(!tryLock()){ showToast('Calma, já estou finalizando...'); return; }
     if(cartDetailed.length===0){ showToast('Adicione um item para vender'); return; }
     if(payment==='dinheiro' && paidNum < total){ showToast('Valor pago menor que o total'); return; }
     for(let it of cartDetailed){ const stock = data.menu.find(m=>m.id===it.id)?.stock ?? 0; if(it.qty > stock){ showToast('Sem estoque para ' + it.name); return; } }
-    const sale = { id: String(Date.now()).slice(-6), items: cartDetailed.map(i=>({name:i.name, price:i.price, qty:i.qty})), total, payment, paid: payment==='dinheiro' ? paidNum : total, change, createdAt: Date.now(), origin:'caixa' };
-    setData(prev=>({...prev, sales:[...(prev.sales||[]), sale], menu: prev.menu.map(m=>{ const sold = cartDetailed.find(c=>c.id===m.id); if(!sold) return m; return {...m, stock: Math.max(0, (m.stock ?? 0) - sold.qty)}; })}));
+    const sale = { id: genId(), items: cartDetailed.map(i=>({id:i.id, name:i.name, price:i.price, qty:i.qty})), total, payment, paid: payment==='dinheiro' ? paidNum : total, change, createdAt: Date.now(), origin:'caixa' };
+    setData(prev=>{
+      for(let it of cartDetailed){ const st = prev.menu.find(m=>m.id===it.id)?.stock ?? 0; if(it.qty > st){ showToast('Sem estoque para ' + it.name + ' agora'); return prev; } }
+      return {...prev, sales:[...(prev.sales||[]), sale], menu: prev.menu.map(m=>{ const sold = cartDetailed.find(c=>c.id===m.id); if(!sold) return m; return {...m, stock: Math.max(0, (m.stock ?? 0) - sold.qty)}; })};
+    });
     setCart([]); setPaid(''); setLastSale(sale); showToast('Venda #' + sale.id + ' finalizada');
   }
   function refundSale(s){
+    if(!tryLock()){ showToast('Calma, já estou estornando...'); return; }
     if(!confirm('Estornar a venda #' + s.id + ' de ' + formatBRL(s.total) + '? O estoque volta e a venda some do total de hoje.')) return;
     setData(prev=>{
+      if(!prev.sales.find(x=> x.id===s.id)){ showToast('Essa venda já foi estornada'); return prev; }
       const newMenu = prev.menu.map(m=>{
-        const it = s.items.find(i=> i.name===m.name);
+        const it = s.items.find(i=> (i.id && String(i.id)===String(m.id)) || i.name===m.name);
         if(!it) return m;
         return {...m, stock: (m.stock ?? 0) + it.qty};
       });
@@ -453,13 +468,16 @@ function CaixaView({ data, setData, showToast }){
     showToast('Arquivo do fechamento baixado');
   }
   function closeCash(){
-    if(todaySales.length===0){ showToast('Nenhuma venda para fechar hoje'); return; }
-    if(!confirm('Fechar o caixa de hoje com ' + formatBRL(todayTotal) + ' em ' + todaySales.length + ' vendas? Depois o caixa zera.')) return;
+    if(!tryLock()){ showToast('Calma, já estou fechando...'); return; }
+    const allSales = data.sales || [];
+    if(allSales.length===0){ showToast('Nenhuma venda para fechar'); return; }
+    const allTotal = allSales.reduce((a,s)=>a+s.total,0);
+    if(!confirm('Fechar o caixa com ' + formatBRL(allTotal) + ' em ' + allSales.length + ' vendas? Inclui vendas de dias anteriores não fechadas. Depois o caixa zera.')) return;
     const byPayment = {};
-    todaySales.forEach(s=>{ byPayment[s.payment] = (byPayment[s.payment] || 0) + s.total; });
-    const closing = { id: String(Date.now()).slice(-6), closedAt: Date.now(), date: dateOf(Date.now()), total: todayTotal, count: todaySales.length, byPayment, sales: todaySales };
+    allSales.forEach(s=>{ byPayment[s.payment] = (byPayment[s.payment] || 0) + s.total; });
+    const closing = { id: genId(), closedAt: Date.now(), date: dateOf(Date.now()), total: allTotal, count: allSales.length, byPayment, sales: allSales };
     downloadClosingCSV(closing);
-    setData(prev=>({...prev, sales: (prev.sales||[]).filter(s=> dateOf(s.createdAt)!==dateOf(Date.now())), closings: [...(prev.closings||[]), closing]}));
+    setData(prev=>({...prev, sales: [], closings: [...(prev.closings||[]), closing]}));
     setShowClose(false);
     showToast('Caixa fechado, arquivo baixado e caixa zerado');
   }
@@ -483,7 +501,7 @@ function CaixaView({ data, setData, showToast }){
                   {o.type==='delivery' ? (
                     <button onClick={()=>{ setData(prev=>({...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'awaiting_delivery'} : x)})); showToast('Pedido #' + o.id + ' liberado para a entrega'); }} className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold text-sm mt-2">LIBERAR PARA ENTREGA →</button>
                   ) : (
-                    <button onClick={()=>{ const sale = { id: String(Date.now()).slice(-6), items: o.items, total: o.total, payment, paid: payment==='dinheiro' ? Math.max(paidNum, o.total) : o.total, change: payment==='dinheiro' ? Math.max(0, paidNum - o.total) : 0, createdAt: Date.now(), origin:'caixa-pedido', orderId: o.id }; setData(prev=>({...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'delivered'} : x), sales:[...(prev.sales||[]), sale]})); showToast('Pedido #' + o.id + ' cobrado e entregue na mesa'); }} className="w-full bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm mt-2">COBRAR E ENTREGAR NA MESA ✓</button>
+                    <button onClick={()=>{ if(!tryLock()){ showToast('Calma, já estou cobrando...'); return; } setData(prev=>{ const cur = prev.orders.find(x=> x.id===o.id); if(!cur || cur.status!=='ready'){ showToast('Esse pedido já foi cobrado'); return prev; } const sale = { id: genId(), items: o.items, total: o.total, payment, paid: payment==='dinheiro' ? Math.max(paidNum, o.total) : o.total, change: payment==='dinheiro' ? Math.max(0, paidNum - o.total) : 0, createdAt: Date.now(), origin:'caixa-pedido', orderId: o.id }; return {...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'delivered'} : x), sales:[...(prev.sales||[]), sale]}; }); showToast('Pedido #' + o.id + ' cobrado e entregue na mesa'); }} className="w-full bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm mt-2">COBRAR E ENTREGAR NA MESA ✓</button>
                   )}
                 </div>
               ))}
@@ -590,6 +608,8 @@ function EstoqueView({ data, setData, showToast }){
 }
 
 function ClientView({ data, cart, setCart, showToast, setData, mesaParam }){
+  const busyRef = useRef(false);
+  function tryLock(){ if(busyRef.current) return false; busyRef.current=true; setTimeout(()=>{ busyRef.current=false; }, 900); return true; }
   const [category, setCategory] = useState('Todos');
   const [showCart, setShowCart] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -601,26 +621,25 @@ function ClientView({ data, cart, setCart, showToast, setData, mesaParam }){
   const filtered = category==='Todos' ? activeMenu : activeMenu.filter(m=>(m.category||'Geral')===category);
   const cartDetailed = cart.map(c=>{ const item = data.menu.find(m=>m.id===c.id); return item ? { ...item, qty:c.qty } : null; }).filter(Boolean);
   const subtotal = cartDetailed.reduce((a,i)=>a + i.price*i.qty,0);
-  const service = subtotal * 0.10;
+  const service = checkout.type==='mesa' ? subtotal * 0.10 : 0;
   const total = subtotal + service;
   const cartCount = cartDetailed.reduce((a,i)=>a+i.qty,0);
   function addToCart(m){
     if((m.stock ?? 0) <= 0){ showToast(m.name + ' está esgotado'); return; }
-    const inCart = cart.find(x=>x.id===m.id)?.qty || 0;
-    if(inCart + 1 > (m.stock ?? 0)){ showToast('Só tem ' + m.stock + ' em estoque'); return; }
-    setCart(prev=>{ const ex = prev.find(x=>x.id===m.id); if(ex) return prev.map(x=> x.id===m.id ? {...x, qty:x.qty+1} : x); return [...prev, {id:m.id, qty:1}]; });
+    setCart(prev=>{ const inCart = prev.find(x=>x.id===m.id)?.qty || 0; if(inCart + 1 > (m.stock ?? 0)){ showToast('Só tem ' + m.stock + ' em estoque'); return prev; } const ex = prev.find(x=>x.id===m.id); if(ex) return prev.map(x=> x.id===m.id ? {...x, qty:x.qty+1} : x); return [...prev, {id:m.id, qty:1}]; });
     showToast(m.name + ' adicionado');
   }
   function removeFromCart(id){ setCart(prev=> prev.filter(x=>x.id!==id)); }
   function confirmOrder(){
+    if(!tryLock()){ showToast('Calma, já estou enviando seu pedido...'); return; }
     if(cartDetailed.length===0) return;
     if(checkout.type==='mesa' && !checkout.mesa){ showToast('Escolha a mesa'); return; }
     if(checkout.type==='delivery' && (!checkout.nome.trim() || !checkout.endereco.trim())){ showToast('Preencha nome e endereço para entrega'); return; }
     for(let it of cartDetailed){ const st = data.menu.find(m=>m.id===it.id)?.stock ?? 0; if(it.qty > st){ showToast('Sem estoque para ' + it.name + '. Tem ' + st); return; } }
-    const id = String(Date.now()).slice(-6);
+    const id = genId();
     const code = String(Math.floor(1000 + Math.random()*9000));
-    const order = { id, table: checkout.type==='mesa' ? checkout.mesa : null, type: checkout.type, status:'pending', createdAt: Date.now(), code, customerName: checkout.nome, phone: checkout.telefone, address: checkout.endereco, items: cartDetailed.map(i=>({ name:i.name, price:i.price, qty:i.qty })), subtotal, service, total };
-    setData(prev=>({...prev, orders:[...prev.orders, order], menu: prev.menu.map(m=>{ const sold = cartDetailed.find(c=>c.id===m.id); if(!sold) return m; return {...m, stock: Math.max(0, (m.stock ?? 0) - sold.qty)}; })}));
+    const order = { id, table: checkout.type==='mesa' ? checkout.mesa : null, type: checkout.type, status:'pending', createdAt: Date.now(), code, customerName: checkout.nome, phone: checkout.telefone, address: checkout.endereco, items: cartDetailed.map(i=>({ id:i.id, name:i.name, price:i.price, qty:i.qty })), subtotal, service, total };
+    setData(prev=>{ for(let it of cartDetailed){ const st = prev.menu.find(m=>m.id===it.id)?.stock ?? 0; if(it.qty > st){ showToast('Sem estoque para ' + it.name + ' agora'); return prev; } } return {...prev, orders:[...prev.orders, order], menu: prev.menu.map(m=>{ const sold = cartDetailed.find(c=>c.id===m.id); if(!sold) return m; return {...m, stock: Math.max(0, (m.stock ?? 0) - sold.qty)}; })}; });
     setCart([]); setShowCart(false); setShowCheckout(false); setLastOrder(order); showToast('Pedido #' + id + ' enviado');
   }
   function sendWhatsApp(order){
@@ -652,15 +671,17 @@ function ClientView({ data, cart, setCart, showToast, setData, mesaParam }){
 function KitchenView({ data, setData, showToast }){
   const pending = data.orders.filter(o=>o.status==='pending');
   const ready = data.orders.filter(o=>o.status==='ready');
-  function setStatus(id, status){ setData(prev=>({...prev, orders: prev.orders.map(o=> o.id===id ? {...o, status} : o)})); showToast('Pedido #' + id + ' atualizado'); }
+  function setStatus(id, status){ setData(prev=>{ const cur = prev.orders.find(o=> o.id===id); if(!cur || cur.status===status) return prev; return {...prev, orders: prev.orders.map(o=> o.id===id ? {...o, status} : o)}; }); showToast('Pedido #' + id + ' atualizado'); }
   return (<div className="min-h-screen bg-slate-100"><header className="bg-white p-4 border-b flex justify-between items-center"><div className="flex items-center gap-3"><button onClick={goBack} className="bg-slate-100 px-3 py-2 rounded-lg text-sm font-bold">← Voltar</button><a href="#/caixa" className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-bold">Ver Caixa</a><div><h1 className="font-bold text-xl">Cozinha • {data.restaurant.name || 'Sem restaurante'}</h1><p className="text-xs text-slate-500">Pending = na cozinha • Liberado = vai para o caixa • Caixa libera para mesa ou entrega.</p></div></div><div className="flex gap-4 text-center"><div><p className="text-xs font-bold text-slate-400">PENDENTES</p><p className="font-bold text-xl">{pending.length}</p></div><div><p className="text-xs font-bold text-slate-400">PRONTOS</p><p className="font-bold text-xl text-green-600">{ready.length}</p></div></div></header><main className="p-4 flex gap-4 overflow-x-auto">{pending.length===0 && <div className="w-full text-center mt-16 text-slate-400"><p className="text-4xl">🍳</p><p className="mt-2 font-semibold">Nenhum pedido pendente</p></div>}{pending.map(o=>(<div key={o.id} className="bg-white w-72 shrink-0 rounded-2xl border-l-4 border-orange-500 p-4"><div className="flex justify-between"><span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold">{o.type==='delivery' ? 'ENTREGA' : 'MESA ' + o.table}</span><span className="text-xs text-slate-400">{timeOf(o.createdAt)}</span></div><p className="font-bold mt-3">Pedido #{o.id}</p><div className="bg-slate-50 rounded-lg p-3 mt-2 text-sm space-y-1">{o.items.map((it,idx)=><div key={idx} className="flex justify-between"><span>{it.name}</span><b>x{it.qty}</b></div>)}</div><button onClick={()=>{ setStatus(o.id,'ready'); showToast('Pedido #' + o.id + ' liberado para o caixa'); }} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-sm mt-3">LIBERAR PARA O CAIXA →</button></div>))}{ready.map(o=>(<div key={o.id} className="bg-white w-72 shrink-0 rounded-2xl border-l-4 border-green-500 p-4"><p className="text-xs font-bold text-green-600">LIBERADO PARA O CAIXA</p><p className="font-bold mt-2">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega' : 'Mesa ' + o.table}</p><p className="text-xs text-slate-500 mt-2">Pronto na cozinha. Aguardando o caixa cobrar e liberar.</p><div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mt-3 text-xs font-bold text-amber-800 text-center">Aguardando o Frente de Caixa</div></div>))}</main></div>);
 }
 
 function DeliveryView({ data, setData, showToast }){
+  const busyRef = useRef(false);
+  function tryLock(){ if(busyRef.current) return false; busyRef.current=true; setTimeout(()=>{ busyRef.current=false; }, 900); return true; }
   const [codes, setCodes] = useState({});
   const ready = data.orders.filter(o=>o.type==='delivery' && (o.status==='awaiting_delivery' || o.status==='ready'));
   const waiting = data.orders.filter(o=>o.type==='delivery' && o.status==='pending');
-  function confirmDelivery(o){ const typed = (codes[o.id]||'').trim(); if(typed !== o.code){ showToast('Código incorreto. Peça o código de 4 dígitos para o cliente.'); return; } setData(prev=>({...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'delivered'} : x)})); showToast('Entrega #' + o.id + ' finalizada'); }
+  function confirmDelivery(o){ if(!tryLock()){ showToast('Calma, já estou finalizando...'); return; } const typed = (codes[o.id]||'').trim(); if(typed !== o.code){ showToast('Código incorreto. Peça o código de 4 dígitos para o cliente.'); return; } setData(prev=>{ const cur = prev.orders.find(x=> x.id===o.id); if(!cur || cur.status==='delivered'){ showToast('Essa entrega já foi finalizada'); return prev; } if(prev.sales.find(s=> s.orderId===o.id)){ showToast('Essa entrega já foi lançada no caixa'); return {...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'delivered'} : x)}; } const sale = { id: genId(), items: o.items, total: o.total, payment: o.payment || 'pix', paid: o.total, change: 0, createdAt: Date.now(), origin:'entrega', orderId: o.id }; return {...prev, orders: prev.orders.map(x=> x.id===o.id ? {...x, status:'delivered'} : x), sales:[...(prev.sales||[]), sale]}; }); showToast('Entrega #' + o.id + ' finalizada e lançada no caixa'); }
   return (<div className="min-h-screen bg-slate-50"><header className="bg-blue-600 text-white p-4"><div className="flex items-center gap-3"><button onClick={goBack} className="bg-white/20 px-3 py-2 rounded-lg text-sm font-bold">← Voltar</button><div><h1 className="font-bold text-xl">Entregas • {data.restaurant.name || 'Sem restaurante'}</h1><p className="text-xs text-blue-100">Só entregas liberadas pelo caixa. Peça o código de 4 dígitos para finalizar.</p></div></div></header><main className="p-4 space-y-4 max-w-2xl mx-auto">{ready.length===0 && <div className="bg-white p-6 rounded-2xl text-center"><p className="text-4xl">🛵</p><p className="font-bold mt-2">Nenhuma entrega pronta</p>{waiting.length>0 && <p className="text-xs text-slate-400 mt-2">{waiting.length} entrega(s) aguardando a cozinha.</p>}</div>}{ready.map(o=>(<div key={o.id} className="bg-white p-5 rounded-2xl border"><div className="flex justify-between"><div><h3 className="font-bold text-lg">Pedido #{o.id}</h3><p className="text-sm text-slate-500">{o.customerName} • {o.address}</p><p className="text-sm text-slate-500">{o.phone} • {timeOf(o.createdAt)}</p></div><span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold h-fit">PRONTO</span></div><div className="bg-slate-50 p-3 rounded-lg mt-3 text-sm space-y-1">{o.items.map((it,idx)=><div key={idx} className="flex justify-between"><span>{it.qty}x {it.name}</span><span>{formatBRL(it.price*it.qty)}</span></div>)}<div className="flex justify-between font-bold pt-2 border-t"><span>Total</span><span>{formatBRL(o.total)}</span></div></div><div className="flex gap-2 mt-4"><div className="flex-1"><label className="text-xs font-bold text-slate-500">CÓDIGO DO CLIENTE, 4 DÍGITOS</label><input value={codes[o.id]||''} onChange={e=>setCodes({...codes, [o.id]: e.target.value})} inputMode="numeric" placeholder="Ex: 1234" className="w-full border rounded-lg p-2.5 mt-1 text-center font-mono text-lg tracking-widest" /></div><button onClick={()=>confirmDelivery(o)} className="bg-blue-600 text-white px-6 rounded-lg font-bold">Entregar</button></div></div>))}</main></div>);
 }
 
