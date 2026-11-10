@@ -449,8 +449,75 @@ function App(){
   }
   function showToast(m){ setToast(m); setTimeout(()=>setToast(''),3000); }
   useEffect(()=>{ const onHash = ()=> setRoute(parseHash()); window.addEventListener('hashchange', onHash); return ()=> window.removeEventListener('hashchange', onHash); },[]);
-  useEffect(()=>{ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} },[data]);
-  useEffect(()=>{ const onStorage = (e)=>{ if(e.key===KEY && e.newValue){ try{ setData(JSON.parse(e.newValue)); }catch(err){} } }; window.addEventListener('storage', onStorage); const iv = setInterval(()=>{ try{ const raw = localStorage.getItem(KEY); if(raw){ const parsed = JSON.parse(raw); if(JSON.stringify(parsed)!==JSON.stringify(data)) setData(parsed); } }catch(e){} },2000); return ()=>{ window.removeEventListener('storage', onStorage); clearInterval(iv); }; },[data]);
+  const [loaded, setLoaded] = useState(false);
+  const lastSyncedRef = useRef('');
+  const isFetchingRef = useRef(false);
+  // Carrega do D1 na primeira abertura
+  useEffect(()=>{
+    (async ()=>{
+      try{
+        const r = await fetch('/api/sync');
+        if(r.ok){
+          const apiData = await r.json();
+          // Se o D1 já tem restaurante ou cardápio, usa ele. Se está vazio e tem dados locais, migra os locais para o D1.
+          const apiHasData = (apiData.menu && apiData.menu.length>0) || (apiData.restaurant && apiData.restaurant.name);
+          const localRaw = localStorage.getItem(KEY);
+          if(apiHasData){
+            const norm = { ...apiData, passwords: apiData.passwords || { admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' } };
+            lastSyncedRef.current = JSON.stringify(norm);
+            setData(norm);
+            try{ localStorage.setItem(KEY, JSON.stringify(norm)); }catch(e){}
+          } else if(localRaw){
+            try{
+              const localData = JSON.parse(localRaw);
+              if(localData && localData.restaurant && (localData.restaurant.name || (localData.menu||[]).length>0)){
+                await fetch('/api/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(localData) });
+                lastSyncedRef.current = JSON.stringify(localData);
+              }
+            }catch(e){}
+          }
+        }
+      }catch(e){ /* sem internet ou sem D1, usa localStorage */ }
+      setLoaded(true);
+    })();
+  },[]);
+  // Salva no D1 quando muda (com debounce) + mantém cópia local como backup
+  useEffect(()=>{
+    if(!loaded) return;
+    try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){}
+    const json = JSON.stringify(data);
+    if(json===lastSyncedRef.current) return;
+    const timer = setTimeout(async ()=>{
+      try{
+        const r = await fetch('/api/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: json });
+        if(r.ok) lastSyncedRef.current = json;
+      }catch(e){}
+    }, 600);
+    return ()=> clearTimeout(timer);
+  },[data, loaded]);
+  // Polling do D1 a cada 3s para sincronizar entre aparelhos
+  useEffect(()=>{
+    if(!loaded) return;
+    const iv = setInterval(async ()=>{
+      if(isFetchingRef.current) return;
+      isFetchingRef.current = true;
+      try{
+        const r = await fetch('/api/sync');
+        if(r.ok){
+          const apiData = await r.json();
+          const norm = { ...apiData, passwords: apiData.passwords || { admin:'', caixa:'', cozinha:'', entrega:'', estoque:'' } };
+          const json = JSON.stringify(norm);
+          if(json!==JSON.stringify(data) && json!==lastSyncedRef.current){
+            lastSyncedRef.current = json;
+            setData(norm);
+            try{ localStorage.setItem(KEY, JSON.stringify(norm)); }catch(e){}
+          }
+        }
+      }catch(e){}
+      isFetchingRef.current = false;
+    }, 3000);
+    return ()=> clearInterval(iv);
+  },[data, loaded]);
   return (<div>{route.view==='admin' && <AuthGate role="admin" title="Admin" passwords={data.passwords} unlocked={!!unlocked.admin} onUnlock={onUnlock}><AdminView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='cliente' && <ClientView data={data} cart={cart} setCart={setCart} showToast={showToast} setData={setData} mesaParam={route.mesa} />}{route.view==='cozinha' && <AuthGate role="cozinha" title="Cozinha" passwords={data.passwords} unlocked={!!unlocked.cozinha} onUnlock={onUnlock}><KitchenView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='entrega' && <AuthGate role="entrega" title="Entrega" passwords={data.passwords} unlocked={!!unlocked.entrega} onUnlock={onUnlock}><DeliveryView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='caixa' && <AuthGate role="caixa" title="Frente de Caixa" passwords={data.passwords} unlocked={!!unlocked.caixa} onUnlock={onUnlock}><CaixaView data={data} setData={setData} showToast={showToast} /></AuthGate>}{route.view==='estoque' && <AuthGate role="estoque" title="Estoque" passwords={data.passwords} unlocked={!!unlocked.estoque} onUnlock={onUnlock}><EstoqueView data={data} setData={setData} showToast={showToast} /></AuthGate>}{toast && <div className="fixed top-4 right-4 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] text-sm font-semibold">{toast}</div>}</div>);
 }
 const root = ReactDOM.createRoot(document.getElementById('root'));

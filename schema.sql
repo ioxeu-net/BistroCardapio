@@ -55,3 +55,9 @@ CREATE TABLE IF NOT EXISTS passwords (
 
 INSERT OR IGNORE INTO restaurant (id, name, whatsapp, cover, message) VALUES (1, '', '', '', 'Obrigado pela preferência! Volte sempre.');
 INSERT OR IGNORE INTO passwords (role, password) VALUES ('admin', ''), ('caixa', ''), ('cozinha', ''), ('entrega', ''), ('estoque', '');
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT ''
+);
+INSERT OR IGNORE INTO settings (key, value) VALUES ('tables', '[1,2,3,4]');
