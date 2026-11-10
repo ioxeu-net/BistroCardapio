@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lemgra OS - Sistema Real</title>
+<title>BistroCardapio - Sistema Real</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -100,6 +100,7 @@ function AuthGate({ role, title, passwords, unlocked, onUnlock, children }){
 function AdminView({ data, setData, showToast }){
   const [form, setForm] = useState({ name:'', desc:'', price:'', category:'Geral', img:'', active:true, stock:'10', minStock:'5' });
   const [editingId, setEditingId] = useState(null);
+  const [tab, setTab] = useState('restaurante');
   const base = window.location.href.split('#')[0];
   const links = [
     { label:'Cliente', url: base + '#/cliente', desc:'Cardápio para o cliente' },
@@ -139,7 +140,7 @@ function AdminView({ data, setData, showToast }){
   const todayTotal = todaySales.reduce((a,s)=>a+s.total,0);
   return (
     <div className="min-h-screen">
-      <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-5xl mx-auto flex justify-between items-center"><div><p className="font-extrabold text-lg">Lemgra <span className="text-orange-500">OS</span></p><p className="text-xs text-slate-400">Painel real, sem dados de demonstração</p></div><div className="flex gap-2"><a href="#/caixa" className="bg-green-600 px-4 py-2 rounded-lg text-sm font-bold">Abrir Caixa</a><a href="#/estoque" className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold">Estoque</a></div></div></header>
+      <header className="bg-slate-900 text-white p-4 sticky top-0 z-20"><div className="max-w-5xl mx-auto flex justify-between items-center"><div><p className="font-extrabold text-lg">Bistro<span className="text-orange-500">Cardapio</span></p><p className="text-xs text-slate-400">Painel real, sem dados de demonstração</p></div><div className="flex gap-2"><a href="#/caixa" className="bg-green-600 px-4 py-2 rounded-lg text-sm font-bold">Abrir Caixa</a><a href="#/estoque" className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold">Estoque</a></div></div></header>
       <main className="max-w-5xl mx-auto p-4 space-y-6 pb-20">
         {!data.restaurant.name && (<div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl"><p className="font-bold text-amber-900">Comece aqui: cadastre o restaurante abaixo.</p><p className="text-sm text-amber-800 mt-1">Sem nome e sem cardápio, o cliente vê uma tela vazia de verdade, não um restaurante fake.</p></div>)}
         <div className="grid grid-cols-3 gap-3">
@@ -147,7 +148,17 @@ function AdminView({ data, setData, showToast }){
           <div className="bg-white p-4 rounded-2xl border"><p className="text-xs font-bold text-slate-400">PEDIDOS</p><p className="font-extrabold text-xl mt-1">{data.orders.length}</p><p className="text-xs text-slate-500">Total de pedidos do cardápio</p></div>
           <div className="bg-white p-4 rounded-2xl border"><p className="text-xs font-bold text-slate-400">ESTOQUE BAIXO</p><p className="font-extrabold text-xl mt-1 text-red-600">{data.menu.filter(m=> (m.stock ?? 0) <= (m.minStock ?? 5)).length}</p><p className="text-xs text-slate-500">Itens abaixo do mínimo</p></div>
         </div>
-        <section className="bg-white p-5 rounded-2xl border">
+        <div className="bg-white p-2 rounded-2xl border flex gap-2 overflow-x-auto sticky top-[68px] z-10">
+          {[
+            {id:'restaurante', label:'🏪 Restaurante'},
+            {id:'cardapio', label:'🍽️ Cardápio'},
+            {id:'mesas', label:'📱 Mesas e QR'},
+            {id:'senhas', label:'🔒 Senhas'},
+            {id:'links', label:'🔗 Links'},
+            {id:'pedidos', label:'🧾 Pedidos'},
+          ].map(x=>(<button key={x.id} onClick={()=>setTab(x.id)} className={'px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap ' + (tab===x.id ? 'bg-slate-900 text-white' : 'bg-slate-100')}>{x.label}</button>))}
+        </div>
+        <section style={{display: tab==='restaurante' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-4">1. Restaurante</h2>
           <div className="grid md:grid-cols-2 gap-4">
             <div><label className="text-sm font-semibold">Nome do restaurante</label><input value={data.restaurant.name} onChange={e=>updateRestaurant('name', e.target.value)} placeholder="Ex: Lanchonete do Centro" className="w-full border rounded-lg p-2.5 mt-1" /></div>
@@ -156,7 +167,7 @@ function AdminView({ data, setData, showToast }){
             <div><label className="text-sm font-semibold">Mensagem de agradecimento</label><textarea value={data.restaurant.message} onChange={e=>updateRestaurant('message', e.target.value)} rows="3" className="w-full border rounded-lg p-2.5 mt-1"></textarea></div>
           </div>
         </section>
-        <section className="bg-white p-5 rounded-2xl border">
+        <section style={{display: tab==='cardapio' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-1">2. Cardápio + Estoque inicial</h2>
           <p className="text-sm text-slate-500 mb-4">Ao cadastrar, já defina o estoque. O estoque baixa sozinho a cada venda no caixa ou pedido do cliente.</p>
           <div className="grid md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl">
@@ -188,12 +199,12 @@ function AdminView({ data, setData, showToast }){
             ))}
           </div>
         </section>
-        <section className="bg-white p-5 rounded-2xl border">
+        <section style={{display: tab==='mesas' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-1">3. Mesas e QR Code real</h2>
           <div className="flex gap-2 mb-4"><button onClick={addTable} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">+ Adicionar mesa</button><button onClick={resetAll} className="text-sm text-red-500 font-semibold px-3">Zerar tudo</button></div>
           <div className="grid md:grid-cols-3 gap-4">{data.tables.map(n=>(<div key={n}><QRBox text={base + '#/cliente?mesa=' + n} label={'Mesa ' + n} /><button onClick={()=>removeTable(n)} className="w-full text-center text-xs text-red-500 mt-1">Remover mesa {n}</button></div>))}</div>
         </section>
-        <section className="bg-white p-5 rounded-2xl border">
+        <section style={{display: tab==='senhas' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-1">Senhas de acesso</h2>
           <p className="text-sm text-slate-500 mb-4">Cliente não tem senha, é aberto. Cada função tem sua senha. Deixe vazio para deixar livre, ou coloque de 4 a 12 caracteres. Troque aqui quando alguém sair da equipe.</p>
           <div className="grid md:grid-cols-2 gap-4">
@@ -218,11 +229,11 @@ function AdminView({ data, setData, showToast }){
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mt-4 text-sm text-blue-900"><b>Como usar no dia a dia:</b> passe a senha do caixa só para quem fica no caixa, a da cozinha só para a cozinha, e a do admin só para o dono. Se um funcionário sair, venha aqui e troque só a senha dele, sem trocar as outras.</div>
           <button onClick={()=>showToast('Senhas salvas automaticamente')} className="mt-3 bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold">Salvar senhas</button>
         </section>
-        <section className="bg-white p-5 rounded-2xl border">
+        <section style={{display: tab==='links' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
           <h2 className="font-bold text-lg mb-4">4. Links separados</h2>
           <div className="space-y-3">{links.map(l=>(<div key={l.label} className="flex flex-col md:flex-row md:items-center gap-2 border rounded-xl p-3"><div className="flex-1"><p className="font-bold">{l.label}</p><p className="text-xs text-slate-500">{l.desc}</p><p className="text-xs break-all text-blue-600 mt-1">{l.url}</p></div><button onClick={()=>copyLink(l.url)} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold">Copiar</button><a href={l.url} className="text-center border px-4 py-2 rounded-lg text-sm font-semibold">Abrir</a></div>))}</div>
         </section>
-        <section className="bg-white p-5 rounded-2xl border">
+        <section style={{display: tab==='pedidos' ? 'block' : 'none'}} className="bg-white p-5 rounded-2xl border">
           <div className="flex justify-between items-center mb-3"><h2 className="font-bold text-lg">5. Pedidos do cardápio</h2><div className="flex gap-2"><button onClick={clearFinished} className="text-sm font-semibold border px-3 py-1.5 rounded-lg">Limpar finalizados</button><button onClick={clearAllOrders} className="text-sm font-semibold text-red-500 border border-red-200 px-3 py-1.5 rounded-lg">Apagar todos</button></div></div>
           {data.orders.length===0 && <p className="text-sm text-slate-400">Nenhum pedido ainda.</p>}
           <div className="space-y-2">{[...data.orders].reverse().map(o=>(<div key={o.id} className="border rounded-xl p-3 flex justify-between"><div><p className="font-bold">Pedido #{o.id} • {o.type==='delivery' ? 'Entrega' : 'Mesa ' + o.table}</p><p className="text-xs text-slate-500">{timeOf(o.createdAt)} • {o.items.map(i=> i.qty + 'x ' + i.name).join(', ')}</p><p className="text-sm font-bold mt-1">{formatBRL(o.total)}</p></div><span className="text-xs font-bold h-fit px-2 py-1 rounded-full bg-slate-100">{o.status}</span></div>))}</div>
